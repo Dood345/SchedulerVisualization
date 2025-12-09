@@ -1,0 +1,176 @@
+:root {
+    --bg-color: #f4f7f6;
+    --sidebar-bg: #ffffff;
+    --text-color: #2c3e50;
+    --primary-color: #3498db;
+    --accent-color: #e74c3c;
+    --border-color: #ddd;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+}
+
+.container {
+    display: flex;
+    width: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 320px;
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--border-color);
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.sidebar h2, .sidebar h3 {
+    margin-bottom: 10px;
+    color: #34495e;
+}
+
+.config-section {
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.9em;
+    margin-bottom: 4px;
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 100%;
+    margin-top: 5px;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+button.secondary {
+    background-color: #95a5a6;
+    margin-top: 5px;
+}
+
+.hint {
+    font-size: 0.8em;
+    color: #7f8c8d;
+    margin-bottom: 10px;
+}
+
+/* Task List */
+.task-item {
+    background: #ecf0f1;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    border-left: 4px solid #bdc3c7;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.legend {
+    display: flex;
+    gap: 15px;
+    font-size: 0.9em;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.box {
+    width: 15px;
+    height: 15px;
+    border-radius: 3px;
+    border: 1px solid #999;
+}
+
+.box.running { background-color: #2ecc71; } /* Green generic, logs will use task color */
+.box.ready { background-color: #bdc3c7; border: 1px dashed #7f8c8d; }
+.box.blocked { background-color: #e74c3c; } /* Red */
+.box.deadline { background-color: #000; }
+
+.canvas-container {
+    flex: 1;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    position: relative;
+    overflow-x: auto;
+    margin-bottom: 20px;
+}
+
+canvas {
+    display: block;
+}
+
+/* Log */
+.log-container {
+    height: 150px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+#logContent {
+    flex: 1;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.log-entry { margin-bottom: 2px; }
