@@ -9,6 +9,7 @@ const renderer = new Renderer('simCanvas');
 // Initial Setup
 const runBtn = document.getElementById('runBtn');
 const resetBtn = document.getElementById('resetBtn');
+const demoBtn = document.getElementById('demoBtn');
 const taskForm = document.getElementById('taskForm');
 const resourceForm = document.getElementById('resourceForm');
 const pipToggle = document.getElementById('pipToggle');
@@ -17,6 +18,7 @@ const statusInd = document.getElementById('statusIndicator');
 // Event Listeners
 runBtn.addEventListener('click', runSimulation);
 resetBtn.addEventListener('click', resetSimulation);
+if (demoBtn) demoBtn.addEventListener('click', loadDemo);
 taskForm.addEventListener('submit', handleAddTask);
 resourceForm.addEventListener('submit', handleAddResource);
 
@@ -29,6 +31,24 @@ document.querySelectorAll('input[name="protocol"]').forEach(radio => {
         console.log(`Protocol set to: ${val}`);
     });
 });
+
+function loadDemo() {
+    resetSimulation();
+    // Task 1: T1, P20, C5, Pri1
+    sched.addTask(new Task('T1', 20, 5, 0));
+    let t1 = sched.tasks[0]; t1.basePriority = 1; t1.currentPriority = 1; t1.color = '#3498db';
+
+    // Task 2: T2, P40, C10, Pri2
+    sched.addTask(new Task('T2', 40, 10, 0));
+    let t2 = sched.tasks[1]; t2.basePriority = 2; t2.currentPriority = 2; t2.color = '#e74c3c';
+
+    // Task 3: T3, P60, C5, Pri3
+    sched.addTask(new Task('T3', 60, 5, 0));
+    let t3 = sched.tasks[2]; t3.basePriority = 3; t3.currentPriority = 3; t3.color = '#2ecc71';
+
+    updateUI();
+    alert("Demo Tasks Loaded (T1, T2, T3)");
+}
 
 function handleAddTask(e) {
     e.preventDefault();
@@ -77,11 +97,14 @@ function runSimulation() {
     statusInd.textContent = 'Running...';
     sched.status = 'OK';
 
-    // Auto-calculate hyperperiod or fixed duration? 
-    // Use hyperperiod but cap it at 100 for safety.
+    // Auto-calculate hyperperiod or fixed duration
     let duration = sched.hyperperiod;
     if (duration === 0) duration = 50;
-    if (duration > 100) duration = 100; // Limit
+    // if (duration > 100) duration = 100; // Limit
+
+    // Update Hyperperiod Display
+    const hpEl = document.getElementById('hyperperiodVal');
+    if (hpEl) hpEl.textContent = sched.hyperperiod;
 
     const history = sched.run(duration);
 
