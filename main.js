@@ -36,15 +36,15 @@ function loadDemo() {
     resetSimulation();
     // Task 1: T1, P20, C5, Pri1
     sched.addTask(new Task('T1', 20, 5, 0));
-    let t1 = sched.tasks[0]; t1.basePriority = 1; t1.currentPriority = 1; t1.color = '#3498db';
+    let t1 = sched.tasks[0]; t1.basePriority = 1; t1.currentPriority = 1; t1.color = '#9000ffff';
 
     // Task 2: T2, P40, C10, Pri2
     sched.addTask(new Task('T2', 40, 10, 0));
-    let t2 = sched.tasks[1]; t2.basePriority = 2; t2.currentPriority = 2; t2.color = '#e74c3c';
+    let t2 = sched.tasks[1]; t2.basePriority = 2; t2.currentPriority = 2; t2.color = '#00fbffff';
 
     // Task 3: T3, P60, C5, Pri3
     sched.addTask(new Task('T3', 60, 5, 0));
-    let t3 = sched.tasks[2]; t3.basePriority = 3; t3.currentPriority = 3; t3.color = '#2ecc71';
+    let t3 = sched.tasks[2]; t3.basePriority = 3; t3.currentPriority = 3; t3.color = '#eaff00ff';
 
     updateUI();
     alert("Demo Tasks Loaded (T1, T2, T3)");

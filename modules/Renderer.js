@@ -75,31 +75,53 @@ export class Renderer {
                 let h = 20; // Bar height
                 let yBar = centerY - 10;
 
-                if (taskState.state === STATE.RUNNING) {
-                    this.ctx.fillStyle = task.color || "#2ecc71"; // Green
-                    this.ctx.fillRect(x, yBar, w, h);
+                // Default: Task Color Fill
+                this.ctx.fillStyle = task.color;
+                let strokeColor = null;
+                let isFullHeight = true;
 
-                    // Check if critical section (blockedOn is null, but we need to check if holding resource)
-                    // History doesn't strictly say if holding resource, but we can infer or add to history.
-                    // For now, simple run block.
+                if (taskState.state === STATE.RUNNING) {
+                    strokeColor = "#2ecc71"; // Green Outline
+                    // Optional: Make running tasks "pop" more?
                 } else if (taskState.state === STATE.BLOCKED) {
-                    this.ctx.fillStyle = "#e74c3c"; // Red
-                    this.ctx.fillRect(x, yBar + 5, w, h - 10); // Thinner
-                    if (taskState.blockedOn) {
-                        this.ctx.font = "9px Arial";
-                        this.ctx.fillStyle = "#fff";
-                        this.ctx.fillText(taskState.blockedOn, x + 2, yBar + 12);
-                    }
+                    strokeColor = "#e74c3c"; // Red Outline
                 } else if (taskState.state === STATE.READY) {
-                    // Preempted or just ready
-                    this.ctx.fillStyle = "#bdc3c7"; // Grey
-                    this.ctx.fillRect(x, yBar + 8, w, 4); // Line
+                    strokeColor = "#bdc3c7"; // Grey Outline
+                    // Maybe make Ready bars slightly shorter or transparent?
+                    this.ctx.fillStyle = task.color;
+                    // To distinguish Ready from Running besides border:
+                    // Maybe use `globalAlpha`?
+                    // No, let's stick to user request: "outline based on statecode".
+                    // But if I have Blue Bar with Green Border (Run) vs Blue Bar with Grey Border (Ready)...
+                    // It might be hard to tell. 
+                    // Let's make Ready bars half-height to be standard "Ready" indicator but still colored?
+                    // "shapes... remain same" -> probably wants full height.
                 }
 
-                // Prio change indicator?
+                if (strokeColor) {
+                    // Fill
+                    this.ctx.fillRect(x, yBar, w, h);
+
+                    // Stroke
+                    this.ctx.lineWidth = 3;
+                    this.ctx.strokeStyle = strokeColor;
+                    this.ctx.strokeRect(x, yBar, w, h);
+
+                    // Reset
+                    this.ctx.lineWidth = 1;
+                }
+
+                if (taskState.state === STATE.BLOCKED && taskState.blockedOn) {
+                    this.ctx.font = "9px Arial";
+                    this.ctx.fillStyle = "#fff";
+                    // Center text
+                    this.ctx.fillText(taskState.blockedOn, x + 2, yBar + 12);
+                }
+
+                // Prio change indicator
                 if (taskState.prio !== undefined && taskState.prio !== task.basePriority) {
                     // Draw indicator
-                    this.ctx.fillStyle = "orange";
+                    this.ctx.fillStyle = "orange"; // Priority Boost Color
                     this.ctx.beginPath();
                     this.ctx.arc(x + w / 2, yBar - 3, 2, 0, 2 * Math.PI);
                     this.ctx.fill();
