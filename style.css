@@ -37,12 +37,16 @@ body {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    flex-shrink: 0;
+    /* Prevent squashing */
 }
 
-.sidebar h2, .sidebar h3 {
+.sidebar h2,
+.sidebar h3 {
     margin-bottom: 10px;
     color: #34495e;
 }
+
 
 .config-section {
     padding-bottom: 20px;
@@ -59,7 +63,8 @@ body {
     margin-bottom: 4px;
 }
 
-.form-group input, .form-group select {
+.form-group input,
+.form-group select {
     width: 100%;
     padding: 8px;
     border: 1px solid #ccc;
@@ -108,6 +113,8 @@ button.secondary {
     padding: 20px;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    /* Crucial for nested overflow-x */
 }
 
 header {
@@ -136,10 +143,24 @@ header {
     border: 1px solid #999;
 }
 
-.box.running { background-color: #2ecc71; } /* Green generic, logs will use task color */
-.box.ready { background-color: #bdc3c7; border: 1px dashed #7f8c8d; }
-.box.blocked { background-color: #e74c3c; } /* Red */
-.box.deadline { background-color: #000; }
+.box.running {
+    background-color: #2ecc71;
+}
+
+/* Green generic, logs will use task color */
+.box.ready {
+    background-color: #bdc3c7;
+    border: 1px dashed #7f8c8d;
+}
+
+.box.blocked {
+    background-color: #e74c3c;
+}
+
+/* Red */
+.box.deadline {
+    background-color: #000;
+}
 
 .canvas-container {
     flex: 1;
@@ -173,4 +194,6 @@ canvas {
     font-size: 0.9em;
 }
 
-.log-entry { margin-bottom: 2px; }
+.log-entry {
+    margin-bottom: 2px;
+}

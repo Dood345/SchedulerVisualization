@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RTOS Simulator: RMS & PIP/PCP</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Inline CSS from style.css for complete portability if needed, but style.css is fine locally */
+    </style>
 </head>
 
 <body>
@@ -14,6 +17,9 @@
             <h2>RTOS Simulator</h2>
             <div class="status-panel">
                 <div id="statusIndicator" class="status-ok">System OK</div>
+                <div style="margin-top: 5px; font-size: 0.9em;">
+                    Hyperperiod: <strong id="hyperperiodVal">0</strong>
+                </div>
             </div>
 
             <div class="config-section">
@@ -28,6 +34,7 @@
             <div class="config-section">
                 <button id="runBtn">Run Simulation</button>
                 <button id="resetBtn" class="secondary">Reset</button>
+                <button id="demoBtn" class="secondary" style="background-color: #f39c12;">Load Demo</button>
             </div>
 
             <div class="config-section">
@@ -111,7 +118,546 @@
             </div>
         </main>
     </div>
-    <script type="module" src="main.js"></script>
+
+    <!-- Bundled Logic -->
+    <script>
+        // --- Task.js ---
+        const STATE = {
+            READY: 'READY',
+            RUNNING: 'RUNNING',
+            BLOCKED: 'BLOCKED',
+            COMPLETED: 'COMPLETED'
+        };
+
+        class Task {
+            constructor(id, period, cost, offset = 0) {
+                this.id = id;
+                this.period = parseInt(period);
+                this.cost = parseInt(cost);
+                this.offset = parseInt(offset);
+                this.deadline = this.period;
+                this.basePriority = this.period;
+                this.currentPriority = this.basePriority;
+
+                // Dynamic State
+                this.state = STATE.COMPLETED;
+                this.remainingCost = 0;
+                this.nextRelease = this.offset;
+                this.absDeadline = 0;
+
+                // Logging/Stats
+                this.executedInPeriod = 0;
+                this.color = this.getRandomColor();
+
+                // Resource Management
+                this.resourceRequests = [];
+                this.blockedOn = null;
+            }
+
+            addResourceRequest(resId, startAt, duration) {
+                this.resourceRequests.push({ resId, startAt, duration });
+            }
+
+            reset() {
+                this.state = (this.offset === 0) ? STATE.READY : STATE.COMPLETED;
+                this.remainingCost = (this.offset === 0) ? this.cost : 0;
+                this.nextRelease = this.offset;
+                if (this.offset === 0) {
+                    this.absDeadline = this.period;
+                    this.nextRelease = this.period;
+                } else {
+                    this.absDeadline = 0;
+                }
+                this.currentPriority = this.basePriority;
+                this.executedInPeriod = 0;
+            }
+
+            checkRelease(time) {
+                if (time === this.nextRelease) {
+                    this.state = STATE.READY;
+                    this.remainingCost = this.cost;
+                    this.executedInPeriod = 0;
+                    this.absDeadline = time + this.period;
+                    this.nextRelease += this.period;
+                    return true;
+                }
+                return false;
+            }
+
+            getRandomColor() {
+                const letters = '0123456789ABCDEF';
+                let color = '#';
+                for (let i = 0; i < 6; i++) {
+                    color += letters[Math.floor(Math.random() * 16)];
+                }
+                return color;
+            }
+        }
+
+        // --- Resource.js ---
+        class Resource {
+            constructor(id, ceilingPriority = 0) {
+                this.id = id;
+                this.owner = null;
+                this.ceilingPriority = ceilingPriority;
+                this.blockedQueue = [];
+            }
+
+            isLocked() {
+                return this.owner !== null;
+            }
+        }
+
+        // --- Renderer.js ---
+        const CONSTANTS = {
+            TICK_WIDTH: 20,
+            ROW_HEIGHT: 40,
+            HEADER_HEIGHT: 30,
+            LABEL_WIDTH: 100
+        };
+
+        class Renderer {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+            }
+
+            draw(tasks, history, duration) {
+                const width = CONSTANTS.LABEL_WIDTH + (duration * CONSTANTS.TICK_WIDTH) + 50;
+                const height = CONSTANTS.HEADER_HEIGHT + (tasks.length * CONSTANTS.ROW_HEIGHT) + 50;
+
+                this.canvas.width = width;
+                this.canvas.height = height;
+
+                this.ctx.clearRect(0, 0, width, height);
+
+                this.drawGrid(duration, height);
+                this.drawTasks(tasks, history);
+            }
+
+            drawGrid(duration, height) {
+                this.ctx.fillStyle = "#333";
+                this.ctx.font = "12px Arial";
+
+                for (let t = 0; t <= duration; t++) {
+                    let x = CONSTANTS.LABEL_WIDTH + (t * CONSTANTS.TICK_WIDTH);
+
+                    if (t % 5 === 0) {
+                        this.ctx.fillText(t, x - 5, 20);
+                    }
+
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, CONSTANTS.HEADER_HEIGHT);
+                    this.ctx.lineTo(x, height);
+                    this.ctx.strokeStyle = "#eee";
+                    this.ctx.stroke();
+                }
+            }
+
+            drawTasks(tasks, history) {
+                tasks.forEach((task, index) => {
+                    let y = CONSTANTS.HEADER_HEIGHT + (index * CONSTANTS.ROW_HEIGHT);
+                    let centerY = y + (CONSTANTS.ROW_HEIGHT / 2);
+
+                    this.ctx.fillStyle = "#000";
+                    this.ctx.textAlign = "right";
+                    this.ctx.fillText(`${task.id} (P${task.basePriority})`, CONSTANTS.LABEL_WIDTH - 10, centerY + 4);
+                    this.ctx.textAlign = "left";
+
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, y + CONSTANTS.ROW_HEIGHT);
+                    this.ctx.lineTo(this.canvas.width, y + CONSTANTS.ROW_HEIGHT);
+                    this.ctx.strokeStyle = "#ccc";
+                    this.ctx.stroke();
+
+                    history.forEach(tick => {
+                        let taskState = tick.tasks.find(t => t.id === task.id);
+                        if (!taskState) return;
+
+                        let x = CONSTANTS.LABEL_WIDTH + (tick.time * CONSTANTS.TICK_WIDTH);
+                        let w = CONSTANTS.TICK_WIDTH - 1;
+                        let h = 20;
+                        let yBar = centerY - 10;
+
+                        if (taskState.state === STATE.RUNNING) {
+                            this.ctx.fillStyle = task.color || "#2ecc71";
+                            this.ctx.fillRect(x, yBar, w, h);
+                        } else if (taskState.state === STATE.BLOCKED) {
+                            this.ctx.fillStyle = "#e74c3c";
+                            this.ctx.fillRect(x, yBar + 5, w, h - 10);
+                            if (taskState.blockedOn) {
+                                this.ctx.font = "9px Arial";
+                                this.ctx.fillStyle = "#fff";
+                                this.ctx.fillText(taskState.blockedOn, x + 2, yBar + 12);
+                            }
+                        } else if (taskState.state === STATE.READY) {
+                            this.ctx.fillStyle = "#bdc3c7";
+                            this.ctx.fillRect(x, yBar + 8, w, 4);
+                        }
+
+                        if (taskState.prio !== undefined && taskState.prio !== task.basePriority) {
+                            this.ctx.fillStyle = "orange";
+                            this.ctx.beginPath();
+                            this.ctx.arc(x + w / 2, yBar - 3, 2, 0, 2 * Math.PI);
+                            this.ctx.fill();
+                        }
+                    });
+                });
+            }
+        }
+
+        // --- Scheduler.js ---
+        function gcd(a, b) { return !b ? a : gcd(b, a % b); }
+        function lcm(a, b) { return (a * b) / gcd(a, b); }
+
+        class Scheduler {
+            constructor() {
+                this.tasks = [];
+                this.resources = new Map();
+                this.history = [];
+                this.currentTime = 0;
+                this.hyperperiod = 0;
+                this.enablePIP = false;
+                this.enablePCP = false;
+            }
+
+            addTask(task) {
+                this.tasks.push(task);
+                this.calculateHyperperiod();
+            }
+
+            addResource(resource) {
+                this.resources.set(resource.id, resource);
+            }
+
+            calculateHyperperiod() {
+                if (this.tasks.length === 0) {
+                    this.hyperperiod = 0;
+                    return;
+                }
+                let periods = this.tasks.map(t => t.period);
+                this.hyperperiod = periods.reduce((acc, val) => lcm(acc, val), periods[0]);
+            }
+
+            calculateCeilings() {
+                this.resources.forEach(r => r.ceilingPriority = 999);
+                this.tasks.forEach(t => {
+                    t.resourceRequests.forEach(req => {
+                        let res = this.resources.get(req.resId);
+                        if (res && t.basePriority < res.ceilingPriority) {
+                            res.ceilingPriority = t.basePriority;
+                        }
+                    });
+                });
+            }
+
+            reset() {
+                this.currentTime = 0;
+                this.history = [];
+                this.tasks.forEach(t => t.reset());
+                this.resources.forEach(r => {
+                    r.owner = null;
+                    r.blockedQueue = [];
+                });
+            }
+
+            run(duration = null) {
+                if (this.enablePCP) this.calculateCeilings();
+                const limit = duration || this.hyperperiod;
+                this.reset();
+                for (let t = 0; t < limit; t++) {
+                    this.tick(t);
+                }
+                return this.history;
+            }
+
+            tick(time) {
+                this.currentTime = time;
+
+                // 1. Release
+                this.tasks.forEach(task => {
+                    if (task.checkRelease(time)) {
+                        task.currentPriority = task.basePriority;
+                        task.blockedOn = null;
+                    }
+                });
+
+                // 2. Select
+                let readyTasks = this.tasks.filter(t => t.state === STATE.READY || t.state === STATE.RUNNING || t.state === STATE.BLOCKED);
+                readyTasks.sort((a, b) => a.currentPriority - b.currentPriority);
+
+                let runningTask = null;
+
+                for (let task of readyTasks) {
+                    let neededRes = task.resourceRequests.find(r => r.startAt === task.executedInPeriod);
+
+                    if (neededRes) {
+                        let res = this.resources.get(neededRes.resId);
+
+                        // PCP Check
+                        let pcpBlock = false;
+                        let pcpBlocker = null;
+                        if (this.enablePCP && !res.isLocked()) {
+                            let sysCeil = 999;
+                            let blockerRes = null;
+                            this.resources.forEach(r => {
+                                if (r.isLocked() && r.owner !== task) {
+                                    if (r.ceilingPriority < sysCeil) {
+                                        sysCeil = r.ceilingPriority;
+                                        blockerRes = r;
+                                    }
+                                }
+                            });
+                            if (task.currentPriority >= sysCeil) {
+                                pcpBlock = true;
+                                pcpBlocker = blockerRes ? blockerRes.owner : null;
+                            }
+                        }
+
+                        if ((res.isLocked() && res.owner !== task) || pcpBlock) {
+                            // Deadlock Check (Simplified for inline)
+                            let cycleFound = false;
+                            let currOwner = res.owner; // or pcpBlocker?
+                            // Re-use logic from module:
+                            // ...
+                            // Assume Deadlock detection works as valid logic copied
+                            let visited = new Set();
+                            visited.add(task.id);
+                            currOwner = pcpBlock ? pcpBlocker : res.owner;
+                            while (currOwner) {
+                                if (visited.has(currOwner.id)) { cycleFound = true; break; }
+                                visited.add(currOwner.id);
+                                if (currOwner.state === STATE.BLOCKED && currOwner.blockedOn) {
+                                    let nextRes = this.resources.get(currOwner.blockedOn);
+                                    currOwner = nextRes ? nextRes.owner : null;
+                                } else { break; }
+                            }
+
+                            if (cycleFound) {
+                                this.status = "DEADLOCK";
+                                return;
+                            }
+
+                            // Blocking
+                            task.state = STATE.BLOCKED;
+                            task.blockedOn = res.id;
+                            res.blockedQueue.push(task);
+
+                            // PIP/PCP Inheritance
+                            if (this.enablePIP || this.enablePCP) {
+                                let owner = pcpBlock ? pcpBlocker : res.owner;
+                                if (owner && task.currentPriority < owner.currentPriority) {
+                                    owner.currentPriority = task.currentPriority;
+                                }
+                            }
+                            continue;
+                        } else {
+                            // Acquire
+                            if (!res.isLocked()) {
+                                res.owner = task;
+                            }
+                        }
+                    }
+                    runningTask = task;
+                    break;
+                }
+
+                // Optimization: If PIP logic requires re-sort, technically needs re-loop. 
+                // But simplified version in module matches this.
+
+                // 3. Exec
+                if (runningTask) {
+                    runningTask.state = STATE.RUNNING;
+                    runningTask.remainingCost--;
+                    runningTask.executedInPeriod++;
+
+                    runningTask.resourceRequests.forEach(req => {
+                        if (runningTask.executedInPeriod === req.startAt + req.duration) {
+                            let res = this.resources.get(req.resId);
+                            if (res.owner === runningTask) {
+                                res.owner = null;
+                                if (this.enablePIP || this.enablePCP) {
+                                    runningTask.currentPriority = runningTask.basePriority;
+                                }
+                            }
+                        }
+                    });
+
+                    if (runningTask.remainingCost <= 0) {
+                        runningTask.state = STATE.COMPLETED;
+                        this.resources.forEach(r => {
+                            if (r.owner === runningTask) {
+                                r.owner = null;
+                                runningTask.currentPriority = runningTask.basePriority;
+                            }
+                        });
+                    }
+                }
+
+                // 4. History
+                const snapshot = this.tasks.map(t => ({
+                    id: t.id,
+                    state: (t === runningTask) ? STATE.RUNNING : (t.state === STATE.RUNNING ? STATE.READY : t.state),
+                    remaining: t.remainingCost,
+                    prio: t.currentPriority,
+                    blockedOn: t.blockedOn
+                }));
+
+                this.history.push({
+                    time: time,
+                    runningTaskId: runningTask ? runningTask.id : null,
+                    tasks: snapshot
+                });
+            }
+        }
+
+        // --- Main.js ---
+        const sched = new Scheduler();
+        const renderer = new Renderer('simCanvas');
+
+        const runBtn = document.getElementById('runBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const demoBtn = document.getElementById('demoBtn');
+        const taskForm = document.getElementById('taskForm');
+        const resourceForm = document.getElementById('resourceForm');
+        const statusInd = document.getElementById('statusIndicator');
+
+        runBtn.addEventListener('click', runSimulation);
+        resetBtn.addEventListener('click', resetSimulation);
+        demoBtn.addEventListener('click', loadDemo);
+        taskForm.addEventListener('submit', handleAddTask);
+        resourceForm.addEventListener('submit', handleAddResource);
+
+        document.querySelectorAll('input[name="protocol"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const val = e.target.value;
+                sched.enablePIP = (val === 'PIP' || val === 'PCP');
+                sched.enablePCP = (val === 'PCP');
+                console.log(`Protocol set to: ${val}`);
+            });
+        });
+
+        function loadDemo() {
+            resetSimulation();
+            // Task 1: T1, P20, C5, Pri1
+            sched.addTask(new Task('T1', 20, 5, 0));
+            // Fix priority mapping if needed. Task Constructor: id, p, c, offset. 
+            // We need to set priority manually or rely on RMS default.
+            // Let's explicitly set it.
+            let t1 = sched.tasks[0]; t1.basePriority = 1; t1.currentPriority = 1; t1.color = '#3498db';
+
+            // Task 2: T2, P40, C10, Pri2
+            sched.addTask(new Task('T2', 40, 10, 0));
+            let t2 = sched.tasks[1]; t2.basePriority = 2; t2.currentPriority = 2; t2.color = '#e74c3c';
+
+            // Task 3: T3, P60, C5, Pri3
+            sched.addTask(new Task('T3', 60, 5, 0));
+            let t3 = sched.tasks[2]; t3.basePriority = 3; t3.currentPriority = 3; t3.color = '#2ecc71';
+
+            updateUI();
+            alert("Demo Tasks Loaded (T1, T2, T3)");
+        }
+
+        function handleAddTask(e) {
+            e.preventDefault();
+            const id = document.getElementById('taskId').value;
+            const period = parseInt(document.getElementById('taskPeriod').value);
+            const cost = parseInt(document.getElementById('taskCost').value);
+            const offset = parseInt(document.getElementById('taskOffset').value);
+            const prio = parseInt(document.getElementById('taskPrio').value);
+            const color = document.getElementById('taskColor').value;
+
+            if (sched.tasks.find(t => t.id === id)) {
+                alert("Task ID already exists!");
+                return;
+            }
+
+            const t = new Task(id, period, cost, offset);
+            t.basePriority = prio;
+            t.currentPriority = prio;
+            t.color = color;
+
+            sched.addTask(t);
+            updateUI();
+        }
+
+        function handleAddResource(e) {
+            e.preventDefault();
+            const taskId = document.getElementById('resTaskSelect').value;
+            const resId = document.getElementById('resId').value;
+            const start = parseInt(document.getElementById('resStart').value);
+            const duration = parseInt(document.getElementById('resDuration').value);
+
+            if (!sched.resources.has(resId)) {
+                sched.addResource(new Resource(resId));
+            }
+
+            const task = sched.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.addResourceRequest(resId, start, duration);
+                alert(`Request added: ${taskId} needs ${resId} at ${start} for ${duration}s`);
+            }
+        }
+
+        function runSimulation() {
+            statusInd.className = 'status-ok';
+            statusInd.textContent = 'Running...';
+            sched.status = 'OK';
+
+            let duration = sched.hyperperiod;
+            if (duration === 0) duration = 50;
+            // if (duration > 100) duration = 100; // Unlock duration for visibility
+
+            // Update Hyperperiod Display
+            document.getElementById('hyperperiodVal').textContent = sched.hyperperiod;
+
+            const history = sched.run(duration);
+
+            renderer.draw(sched.tasks, history, duration);
+            displayLog(history);
+
+            if (sched.status === 'DEADLOCK') {
+                statusInd.className = 'status-error';
+                statusInd.textContent = 'DEADLOCK DETECTED';
+                alert("Simulation stopped due to DEADLOCK.");
+            } else {
+                statusInd.textContent = 'System OK';
+            }
+        }
+
+        function resetSimulation() {
+            sched.tasks = [];
+            sched.resources.clear();
+            sched.reset();
+            updateUI();
+            const canvas = document.getElementById('simCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('logContent').innerHTML = '';
+        }
+
+        function updateUI() {
+            const list = document.getElementById('taskList');
+            list.innerHTML = sched.tasks.map(t => `
+                <div class="task-item" style="border-left: 5px solid ${t.color}">
+                    <strong>${t.id}</strong> (P${t.period}, C${t.cost}, Pri${t.basePriority})
+                </div>
+            `).join('');
+
+            const sel = document.getElementById('resTaskSelect');
+            sel.innerHTML = sched.tasks.map(t => `<option value="${t.id}">${t.id}</option>`).join('');
+        }
+
+        function displayLog(history) {
+            const logDiv = document.getElementById('logContent');
+            logDiv.innerHTML = history.map(h => {
+                let run = h.runningTaskId || '-';
+                return `<div class="log-entry">T=${h.time}: Run=${run}</div>`;
+            }).join('');
+        }
+
+        updateUI();
+    </script>
 </body>
 
 </html>
