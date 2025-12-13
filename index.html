@@ -21,10 +21,15 @@
 
             <div class="config-section">
                 <h3>Protocol</h3>
-                <div class="radio-group">
-                    <label><input type="radio" name="protocol" value="NONE" checked> None (Inversion)</label>
-                    <label><input type="radio" name="protocol" value="PIP"> PIP (Inheritance)</label>
-                    <label><input type="radio" name="protocol" value="PCP"> PCP (Ceiling)</label>
+                <div class="radio-group toggle-buttons">
+                    <input type="radio" id="proto_none" name="protocol" value="NONE" checked>
+                    <label for="proto_none" title="None (Inversion)">None</label>
+
+                    <input type="radio" id="proto_pip" name="protocol" value="PIP">
+                    <label for="proto_pip" title="PIP (Inheritance)">PIP</label>
+
+                    <input type="radio" id="proto_pcp" name="protocol" value="PCP">
+                    <label for="proto_pcp" title="PCP (Ceiling)">PCP</label>
                 </div>
             </div>
 

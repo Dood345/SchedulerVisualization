@@ -458,3 +458,42 @@ canvas {
 .res-table th {
     background: #f9f9f9;
 }
+
+/* --- Toggle Buttons --- */
+.toggle-buttons {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.toggle-buttons input[type="radio"] {
+    display: none;
+}
+
+.toggle-buttons label {
+    display: block;
+    flex: 1;
+    padding: 12px;
+    background-color: #ecf0f1;
+    border: 2px solid #bdc3c7;
+    border-radius: 6px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: bold;
+    color: #7f8c8d;
+    transition: all 0.2s ease;
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.toggle-buttons label:hover {
+    background-color: #e0e0e0;
+    border-color: #95a5a6;
+}
+
+.toggle-buttons input[type="radio"]:checked+label {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 5px rgba(52, 152, 219, 0.3);
+}
