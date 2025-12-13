@@ -1,0 +1,11 @@
+{
+  "name": "schedule-visualization",
+  "version": "1.0.0",
+  "description": "Real-Time System Scheduling Visualization",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/test_rms.js"
+  },
+  "author": "",
+  "license": "ISC"
+}

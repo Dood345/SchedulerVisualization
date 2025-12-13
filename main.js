@@ -12,8 +12,19 @@ const resetBtn = document.getElementById('resetBtn');
 const demoBtn = document.getElementById('demoBtn');
 const taskForm = document.getElementById('taskForm');
 const resourceForm = document.getElementById('resourceForm');
-const pipToggle = document.getElementById('pipToggle');
 const statusInd = document.getElementById('statusIndicator');
+
+// New UI Elements
+const addOpBtn = document.getElementById('addOpBtn');
+const opTypeSel = document.getElementById('opType');
+// Split Inputs
+const opValNum = document.getElementById('opValNum');
+const opValSel = document.getElementById('opValSel');
+
+const newOpsList = document.getElementById('newOpsList');
+const tabLinks = document.querySelectorAll('.tab-link');
+
+let currentInstructions = []; // Builder State
 
 // Event Listeners
 runBtn.addEventListener('click', runSimulation);
@@ -21,6 +32,23 @@ resetBtn.addEventListener('click', resetSimulation);
 if (demoBtn) demoBtn.addEventListener('click', openScenarioModal);
 taskForm.addEventListener('submit', handleAddTask);
 resourceForm.addEventListener('submit', handleAddResource);
+
+// New UI Listeners
+if (addOpBtn) addOpBtn.addEventListener('click', handleAddOp);
+if (opTypeSel) opTypeSel.addEventListener('change', updateBuilderInputState);
+
+tabLinks.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        // Deactivate all
+        document.querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+        // Activate clicked
+        e.target.classList.add('active');
+        const tabId = e.target.getAttribute('data-tab');
+        document.getElementById(tabId).classList.add('active');
+    });
+});
 
 // Modal Elements
 const modal = document.getElementById('scenarioModal');
@@ -46,16 +74,28 @@ function closeScenarioModal() {
 function loadSimpleRMS() {
     resetSimulation();
     // Task 1: T1, P20, C5, Pri1
-    sched.addTask(new Task('T1', 20, 5, 0));
-    let t1 = sched.tasks[0]; t1.basePriority = 1; t1.currentPriority = 1; t1.color = '#9000ffff';
+    // Instructions: COMPUTE(5)
+    const t1 = new Task('T1', 20, 5, 0, [
+        { type: 'COMPUTE', duration: 5 }
+    ]);
+    t1.color = '#9000ffff';
+    sched.addTask(t1);
 
     // Task 2: T2, P40, C10, Pri2
-    sched.addTask(new Task('T2', 40, 10, 0));
-    let t2 = sched.tasks[1]; t2.basePriority = 2; t2.currentPriority = 2; t2.color = '#00fbffff';
+    // Instructions: COMPUTE(10)
+    const t2 = new Task('T2', 40, 10, 0, [
+        { type: 'COMPUTE', duration: 10 }
+    ]);
+    t2.color = '#00fbffff';
+    sched.addTask(t2);
 
     // Task 3: T3, P60, C5, Pri3
-    sched.addTask(new Task('T3', 60, 5, 0));
-    let t3 = sched.tasks[2]; t3.basePriority = 3; t3.currentPriority = 3; t3.color = '#eaff00ff';
+    // Instructions: COMPUTE(5)
+    const t3 = new Task('T3', 60, 5, 0, [
+        { type: 'COMPUTE', duration: 5 }
+    ]);
+    t3.color = '#eaff00ff';
+    sched.addTask(t3);
 
     updateUI();
     console.log("Simple RMS Loaded");
@@ -63,71 +103,101 @@ function loadSimpleRMS() {
 
 function loadPriorityInversion() {
     resetSimulation();
-    // Low Priority Task (T3) - Holds Resource
-    // T3: P=20, C=6, Pri=3. Uses R1 for 4s starting at t=1.
-    sched.addTask(new Task('T_Low', 20, 6, 0));
-    let t3 = sched.tasks[0]; t3.basePriority = 3; t3.currentPriority = 3; t3.color = '#2ecc71'; // Green
 
-    // Medium Priority Task (T2) - CPU Heavy, preemption Noise
-    // T2: P=20, C=4, Pri=2. Starts after T3 acquires lock but before it finishes.
-    // Offset=2 to preempt T3 inside critical section
-    sched.addTask(new Task('T_Med', 20, 4, 3));
-    let t2 = sched.tasks[1]; t2.basePriority = 2; t2.currentPriority = 2; t2.color = '#f1c40f'; // Yellow
+    // T3: Low Priority (Longest Period = 20)
+    // Starts first (Offset 0), grabs the lock.
+    const tLow = new Task('T3', 20, 6, 0, [
+        { type: 'COMPUTE', duration: 1 },
+        { type: 'LOCK', target: 'R1' },
+        { type: 'COMPUTE', duration: 4 }, // Holds lock for a while
+        { type: 'UNLOCK', target: 'R1' },
+        { type: 'COMPUTE', duration: 1 }
+    ]);
+    tLow.color = '#2ecc71';
+    sched.addTask(tLow);
 
-    // High Priority Task (T1) - Needs Resource held by T3
-    // T1: P=20, C=4, Pri=1. Starts at 4, needs R1.
-    sched.addTask(new Task('T_High', 20, 4, 4));
-    let t1 = sched.tasks[2]; t1.basePriority = 1; t1.currentPriority = 1; t1.color = '#e74c3c'; // Red
+    // T2: Medium Priority (Medium Period = 15)
+    // Arrives at t=3. MUST preempt T3 (because 15 < 20).
+    const tMed = new Task('T2', 15, 4, 3, [
+        { type: 'COMPUTE', duration: 4 }
+    ]);
+    tMed.color = '#f1c40f';
+    sched.addTask(tMed);
 
-    // Setup Resources
+    // T1: High Priority (Shortest Period = 10)
+    // Arrives at t=4. Preempts T2.
+    // Tries to lock R1 -> BLOCKS (held by T3).
+    // This allows T2 (Medium) to resume, blocking T1 (High) indefinitely.
+    const tHigh = new Task('T1', 10, 4, 4, [
+        { type: 'LOCK', target: 'R1' },
+        { type: 'COMPUTE', duration: 2 },
+        { type: 'UNLOCK', target: 'R1' },
+        { type: 'COMPUTE', duration: 2 }
+    ]);
+    tHigh.color = '#e74c3c';
+    sched.addTask(tHigh);
+
     sched.addResource(new Resource('R1'));
-
-    // T_Low requests R1: Start=1, Duration=4 (occupies 1-5 if uninterrupted)
-    t3.addResourceRequest('R1', 1, 4);
-
-    // T_High requests R1: Start=1, Duration=2 (relative to its start time 4, so absolute ~5)
-    // Actually requests relative to task execution. 
-    // If T_High starts at 4, and needs R1 immediately:
-    t1.addResourceRequest('R1', 0, 2);
-
     updateUI();
+
     alert("Priority Inversion Demo Loaded.\nRun with Protocol=NONE to see Inversion.\nRun with Protocol=PIP to see Inheritance.");
 }
 
 function loadDeadlock() {
     resetSimulation();
 
-    // Task A: P20, C=6. Needs R1 then R2.
-    sched.addTask(new Task('TaskA', 30, 8, 0));
-    let ta = sched.tasks[0]; ta.basePriority = 1; ta.currentPriority = 1; ta.color = '#e67e22';
+    // ---------------------------------------------------------
+    // Scenario: Deadlock Setup
+    // T2 (Low Prio): Holds CS2, wants CS1
+    // T1 (High Prio): Holds CS1, wants CS2
+    // ---------------------------------------------------------
 
-    // Task B: P20, C=6. Needs R2 then R1.
-    sched.addTask(new Task('TaskB', 30, 8, 2)); // Offset 2 to interleave
-    let tb = sched.tasks[1]; tb.basePriority = 2; tb.currentPriority = 2; tb.color = '#9b59b6';
+    // TASK 2: Low Priority (Period 20)
+    // Starts at t=0.
+    // Logic: Runs a bit, locks CS2, then later tries to lock CS1.
+    const t2 = new Task('T2', 20, 6, 0, [
+        { type: 'COMPUTE', duration: 1 },    // Run for 1ms
+        { type: 'LOCK', target: 'CS2' },     // Lock the first resource
+        { type: 'COMPUTE', duration: 2 },    // Burn time so T1 can arrive and preempt us
+        { type: 'LOCK', target: 'CS1' },     // Try to lock the second resource (Deadlock Trigger)
+        { type: 'COMPUTE', duration: 1 },
+        { type: 'UNLOCK', target: 'CS1' },
+        { type: 'UNLOCK', target: 'CS2' }
+    ]);
+    t2.color = '#9b59b6'; // Purple
+    sched.addTask(t2);
 
-    sched.addResource(new Resource('R1'));
-    sched.addResource(new Resource('R2'));
+    // TASK 1: High Priority (Period 10)
+    // Starts at t=2 (Offset).
+    // Logic: Arrives AFTER T2 has already locked CS2.
+    // Because P10 < P20, T1 immediately preempts T2 upon arrival.
+    const t1 = new Task('T1', 10, 6, 2, [
+        { type: 'LOCK', target: 'CS1' },     // Lock the resource T2 doesn't have yet
+        { type: 'COMPUTE', duration: 1 },
+        { type: 'LOCK', target: 'CS2' },     // Try to lock the resource T2 ALREADY has -> BLOCKS
+        { type: 'COMPUTE', duration: 2 },
+        { type: 'UNLOCK', target: 'CS2' },
+        { type: 'UNLOCK', target: 'CS1' }
+    ]);
+    t1.color = '#e67e22'; // Orange
+    sched.addTask(t1);
 
-    // Nested Locks
-    // Task A: Lock R1 at 1 for 6s. Inside, Lock R2 at 3 for 2s.
-    ta.addResourceRequest('R1', 1, 6);
-    ta.addResourceRequest('R2', 3, 2);
-
-    // Task B: Lock R2 at 1 for 6s. Inside, Lock R1 at 3 for 2s.
-    tb.addResourceRequest('R2', 1, 6);
-    tb.addResourceRequest('R1', 3, 2);
+    // Resources
+    // Note: Ceiling priority is 1 (Highest possible) for PCP
+    sched.addResource(new Resource('CS1', 1));
+    sched.addResource(new Resource('CS2', 1));
 
     updateUI();
-    alert("Deadlock Demo Loaded.\nRun with Protocol=NONE to see Deadlock.\nRun with Protocol=PCP to prevent it.");
+    console.log("Deadlock Scenario Loaded: T2(Low) starts first. T1(High) arrives at t=2.");
+    alert("Deadlock Scenario Loaded.\n\nExpected Behavior:\n1. T2 starts, locks CS2.\n2. T1 arrives (t=2), preempts T2, locks CS1.\n3. T1 tries for CS2 -> BLOCKED by T2.\n4. T2 resumes, tries for CS1 -> BLOCKED by T1.\n\nSystem halts.");
 }
 
 function handleAddTask(e) {
     e.preventDefault();
     const id = document.getElementById('taskId').value;
     const period = parseInt(document.getElementById('taskPeriod').value);
-    const cost = parseInt(document.getElementById('taskCost').value);
     const offset = parseInt(document.getElementById('taskOffset').value);
-    const prio = parseInt(document.getElementById('taskPrio').value);
+    // Cost input is gone, used in builder
     const color = document.getElementById('taskColor').value;
 
     if (sched.tasks.find(t => t.id === id)) {
@@ -135,32 +205,153 @@ function handleAddTask(e) {
         return;
     }
 
-    const t = new Task(id, period, cost, offset);
-    t.basePriority = prio;
-    t.currentPriority = prio;
+    if (currentInstructions.length === 0) {
+        alert("Please add at least one execution step (Instruction)!");
+        return;
+    }
+
+    // Validate: Cannot end holding a lock
+    let locksHeld = 0;
+    for (let op of currentInstructions) {
+        if (op.type === 'LOCK') locksHeld++;
+        if (op.type === 'UNLOCK') locksHeld--;
+    }
+    if (locksHeld !== 0) {
+        alert("Warning: Task definition ends with locks still held! This may cause issues.");
+        // We allow it, but warn.
+    }
+
+    // Calculate generic Cost (WCET) for display
+    let totalCost = currentInstructions.reduce((sum, op) => op.type === 'COMPUTE' ? sum + op.duration : sum, 0);
+
+    const t = new Task(id, period, totalCost, offset, [...currentInstructions]); // Copy instructions
     t.color = color;
 
     sched.addTask(t);
+
+    // Reset Form & Builder
+    currentInstructions = [];
+    renderOpsPreview();
+    // Optional: Auto-increment ID?
     updateUI();
 }
 
+function updateBuilderInputState() {
+    const type = opTypeSel.value;
+    if (type === 'COMPUTE') {
+        opValNum.style.display = 'block';
+        opValSel.style.display = 'none';
+        opValNum.focus();
+    } else {
+        opValNum.style.display = 'none';
+        opValSel.style.display = 'block';
+        updateResourceDropdown(); // Refresh options
+    }
+}
+
+function updateResourceDropdown() {
+    opValSel.innerHTML = '';
+
+    if (sched.resources.size === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = "add below";
+        opt.disabled = true;
+        opt.selected = true;
+        opValSel.appendChild(opt);
+        return;
+    }
+
+    sched.resources.forEach((res, id) => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = id;
+        opValSel.appendChild(opt);
+    });
+}
+
+function handleAddOp() {
+    const type = opTypeSel.value;
+    let val = null;
+
+    if (type === 'COMPUTE') {
+        val = parseInt(opValNum.value);
+        if (isNaN(val) || val <= 0) {
+            alert("Duration must be a positive integer");
+            return;
+        }
+    } else {
+        // LOCK/UNLOCK
+        // Check if disabled (no resources)
+        if (opValSel.options.length > 0 && opValSel.options[0].textContent === "add below") {
+            alert("Please define resources in the panel below first.");
+            return;
+        }
+        val = opValSel.value;
+        if (!val) {
+            alert("Please select a resource.");
+            return;
+        }
+    }
+
+    let op = { type: type };
+    if (type === 'COMPUTE') op.duration = val;
+    else op.target = val;
+
+    currentInstructions.push(op);
+
+    // Clear Input
+    if (type === 'COMPUTE') opValNum.value = '';
+    // Don't clear select, keeps last choice
+
+    renderOpsPreview();
+}
+
+function renderOpsPreview() {
+    if (currentInstructions.length === 0) {
+        newOpsList.innerHTML = '<li style="color: #999; font-style: italic; text-align: center;">No steps added</li>';
+        return;
+    }
+
+    newOpsList.innerHTML = currentInstructions.map((op, idx) => {
+        let txt = '';
+        if (op.type === 'COMPUTE') txt = `⚙️ Compute (${op.duration})`;
+        if (op.type === 'LOCK') txt = `🔒 Lock ${op.target}`;
+        if (op.type === 'UNLOCK') txt = `🔓 Unlock ${op.target}`;
+
+        return `<li>
+            <span>${idx + 1}. ${txt}</span>
+            <span class="remove-op" onclick="removeOp(${idx})">✖</span>
+        </li>`;
+    }).join('');
+}
+
+window.removeOp = function (idx) {
+    currentInstructions.splice(idx, 1);
+    renderOpsPreview();
+};
+
 function handleAddResource(e) {
     e.preventDefault();
-    const taskId = document.getElementById('resTaskSelect').value;
-    const resId = document.getElementById('resId').value;
-    const start = parseInt(document.getElementById('resStart').value);
-    const duration = parseInt(document.getElementById('resDuration').value);
 
-    // Ensure resource exists in scheduler
-    if (!sched.resources.has(resId)) {
-        sched.addResource(new Resource(resId));
+    const id = document.getElementById('resId').value.trim();
+    if (!id) return;
+
+    const ceiling = parseInt(document.getElementById('resCeiling').value);
+
+    // Check availability
+    if (sched.resources.has(id)) {
+        alert(`Resource ${id} already exists!`);
+        return;
     }
 
-    const task = sched.tasks.find(t => t.id === taskId);
-    if (task) {
-        task.addResourceRequest(resId, start, duration);
-        alert(`Request added: ${taskId} needs ${resId} at ${start} for ${duration}s`);
-    }
+    const res = new Resource(id, ceiling);
+    sched.addResource(res);
+
+    // Update UI
+    document.getElementById('resId').value = '';
+    updateUI();
+    // If builder is looking at LOCK/UNLOCK, refresh dropdown
+    if (opTypeSel.value !== 'COMPUTE') updateBuilderInputState();
 }
 
 function runSimulation() {
@@ -168,10 +359,18 @@ function runSimulation() {
     statusInd.textContent = 'Running...';
     sched.status = 'OK';
 
+    // Get Protocols
+    const radios = document.getElementsByName('protocol');
+    let proto = 'NONE';
+    for (let r of radios) if (r.checked) proto = r.value;
+
+    sched.enablePIP = (proto === 'PIP');
+    sched.enablePCP = (proto === 'PCP');
+
     // Auto-calculate hyperperiod or fixed duration
     let duration = sched.hyperperiod;
     if (duration === 0) duration = 50;
-    // if (duration > 100) duration = 100; // Limit
+    if (duration > 150) duration = 150; // Safety Cap
 
     // Update Hyperperiod Display
     const hpEl = document.getElementById('hyperperiodVal');
@@ -208,22 +407,102 @@ function resetSimulation() {
 function updateUI() {
     // Update Task List
     const list = document.getElementById('taskList');
-    list.innerHTML = sched.tasks.map(t => `
+    list.innerHTML = sched.tasks.map(t => {
+        // Show instructions summary
+        let ops = t.instructions.length;
+        return `
         <div class="task-item" style="border-left: 5px solid ${t.color}">
-            <strong>${t.id}</strong> (P${t.period}, C${t.cost}, Pri${t.basePriority})
+            <strong>${t.id}</strong> (P${t.period}, C${t.wcet})<br>
+            <small>${ops} Ops</small>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
-    // Update Resource Select
-    const sel = document.getElementById('resTaskSelect');
-    sel.innerHTML = sched.tasks.map(t => `<option value="${t.id}">${t.id}</option>`).join('');
+    // Update Resource Select - NO LONGER NEEDED (Form Removed)
+    // But we might want to update potential other lists?
+
+    // Update Tabs
+    renderTaskDetails();
+    renderResourceStatus();
+}
+
+function renderTaskDetails() {
+    const container = document.getElementById('taskDetailsTab');
+    if (!container) return;
+
+    if (sched.tasks.length === 0) {
+        container.innerHTML = '<p class="hint" style="text-align: center; margin-top: 20px;">Add tasks to see their instruction pipeline here.</p>';
+        return;
+    }
+
+    container.innerHTML = sched.tasks.map(t => {
+        const flow = t.instructions.map(op => {
+            if (op.type === 'COMPUTE') return `<span class="badge badge-compute">⚙️ ${op.duration}</span>`;
+            if (op.type === 'LOCK') return `<span class="badge badge-lock">🔒 ${op.target}</span>`;
+            if (op.type === 'UNLOCK') return `<span class="badge badge-unlock">🔓 ${op.target}</span>`;
+        }).join('<span class="arrow">→</span>');
+
+        return `
+        <div class="task-spec-card" style="border-left: 4px solid ${t.color}">
+            <div class="spec-header">
+                <strong>${t.id}</strong> 
+                <span class="text-muted">P: ${t.period} | Offset: ${t.offset} | WCET: ${t.wcet}</span>
+            </div>
+            <div class="spec-flow">${flow}</div>
+        </div>`;
+    }).join('');
+}
+
+function renderResourceStatus() {
+    const container = document.getElementById('resourceStatusTab');
+    if (!container) return;
+
+    // We need to inspect the scheduler resources.
+    // The simplified Scheduler.js might not expose "Resource objects" in a single array unless we track them.
+    // sched.resources is a Map.
+
+    if (sched.resources.size === 0) {
+        container.innerHTML = '<p class="hint">No resources known.</p>';
+        return;
+    }
+
+    let rows = '';
+    sched.resources.forEach((res, id) => {
+        let owner = res.owner ? `<strong>${res.owner.id}</strong>` : '<span style="color:#aaa">-</span>';
+        let blocked = res.blockedQueue.length > 0 ? res.blockedQueue.map(t => t.id).join(', ') : '-';
+        let ceiling = res.ceilingPriority < 999999 ? res.ceilingPriority : 'N/A';
+
+        rows += `<tr>
+            <td>${id}</td>
+            <td>${owner}</td>
+            <td>${blocked}</td>
+            <td>${ceiling}</td>
+        </tr>`;
+    });
+
+    container.innerHTML = `
+        <table class="res-table">
+            <thead>
+                <tr>
+                    <th>Resource ID</th>
+                    <th>Current Owner</th>
+                    <th>Blocked Queue</th>
+                    <th>PCP Ceiling</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
 }
 
 function displayLog(history) {
     const logDiv = document.getElementById('logContent');
+    // Filter changes only? or full log?
+    // Full log is cleaner for small duration.
     logDiv.innerHTML = history.map(h => {
         let run = h.runningTaskId || '-';
-        return `<div class="log-entry">T=${h.time}: Run=${run}</div>`;
+        // Add Deadlock note?
+        return `<div class="log-entry">T=${h.time}: Run=${run} ${h.tasks.find(t => t.state === 'BLOCKED') ? '(BLOCKED)' : ''}</div>`;
     }).join('');
 }
 
