@@ -116,6 +116,20 @@
         </main>
     </div>
 
+    <!-- Scenario Selection Modal -->
+    <div id="scenarioModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Select Simulation Scenario</h3>
+            <p>Choose a preset scenario to load:</p>
+            <div class="modal-actions">
+                <button id="scenarioRMS" class="modal-btn">1. Simple RMS</button>
+                <button id="scenarioInversion" class="modal-btn">2. Priority Inversion Demo</button>
+                <button id="scenarioDeadlock" class="modal-btn">3. Deadlock Poteintial</button>
+            </div>
+            <button id="closeModalBtn" class="secondary" style="margin-top: 15px;">Cancel</button>
+        </div>
+    </div>
+
     <!-- Restored Modular Script -->
     <script type="module" src="main.js"></script>
 </body>

@@ -18,21 +18,32 @@ const statusInd = document.getElementById('statusIndicator');
 // Event Listeners
 runBtn.addEventListener('click', runSimulation);
 resetBtn.addEventListener('click', resetSimulation);
-if (demoBtn) demoBtn.addEventListener('click', loadDemo);
+if (demoBtn) demoBtn.addEventListener('click', openScenarioModal);
 taskForm.addEventListener('submit', handleAddTask);
 resourceForm.addEventListener('submit', handleAddResource);
 
-// Handle Protocol Selection
-document.querySelectorAll('input[name="protocol"]').forEach(radio => {
-    radio.addEventListener('change', (e) => {
-        const val = e.target.value;
-        sched.enablePIP = (val === 'PIP' || val === 'PCP');
-        sched.enablePCP = (val === 'PCP');
-        console.log(`Protocol set to: ${val}`);
-    });
-});
+// Modal Elements
+const modal = document.getElementById('scenarioModal');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const scenarioRMSBtn = document.getElementById('scenarioRMS');
+const scenarioInversionBtn = document.getElementById('scenarioInversion');
+const scenarioDeadlockBtn = document.getElementById('scenarioDeadlock');
 
-function loadDemo() {
+// Modal Listeners
+if (closeModalBtn) closeModalBtn.addEventListener('click', closeScenarioModal);
+if (scenarioRMSBtn) scenarioRMSBtn.addEventListener('click', () => { loadSimpleRMS(); closeScenarioModal(); });
+if (scenarioInversionBtn) scenarioInversionBtn.addEventListener('click', () => { loadPriorityInversion(); closeScenarioModal(); });
+if (scenarioDeadlockBtn) scenarioDeadlockBtn.addEventListener('click', () => { loadDeadlock(); closeScenarioModal(); });
+
+function openScenarioModal() {
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeScenarioModal() {
+    if (modal) modal.style.display = 'none';
+}
+
+function loadSimpleRMS() {
     resetSimulation();
     // Task 1: T1, P20, C5, Pri1
     sched.addTask(new Task('T1', 20, 5, 0));
@@ -47,7 +58,67 @@ function loadDemo() {
     let t3 = sched.tasks[2]; t3.basePriority = 3; t3.currentPriority = 3; t3.color = '#eaff00ff';
 
     updateUI();
-    alert("Demo Tasks Loaded (T1, T2, T3)");
+    console.log("Simple RMS Loaded");
+}
+
+function loadPriorityInversion() {
+    resetSimulation();
+    // Low Priority Task (T3) - Holds Resource
+    // T3: P=20, C=6, Pri=3. Uses R1 for 4s starting at t=1.
+    sched.addTask(new Task('T_Low', 20, 6, 0));
+    let t3 = sched.tasks[0]; t3.basePriority = 3; t3.currentPriority = 3; t3.color = '#2ecc71'; // Green
+
+    // Medium Priority Task (T2) - CPU Heavy, preemption Noise
+    // T2: P=20, C=4, Pri=2. Starts after T3 acquires lock but before it finishes.
+    // Offset=2 to preempt T3 inside critical section
+    sched.addTask(new Task('T_Med', 20, 4, 3));
+    let t2 = sched.tasks[1]; t2.basePriority = 2; t2.currentPriority = 2; t2.color = '#f1c40f'; // Yellow
+
+    // High Priority Task (T1) - Needs Resource held by T3
+    // T1: P=20, C=4, Pri=1. Starts at 4, needs R1.
+    sched.addTask(new Task('T_High', 20, 4, 4));
+    let t1 = sched.tasks[2]; t1.basePriority = 1; t1.currentPriority = 1; t1.color = '#e74c3c'; // Red
+
+    // Setup Resources
+    sched.addResource(new Resource('R1'));
+
+    // T_Low requests R1: Start=1, Duration=4 (occupies 1-5 if uninterrupted)
+    t3.addResourceRequest('R1', 1, 4);
+
+    // T_High requests R1: Start=1, Duration=2 (relative to its start time 4, so absolute ~5)
+    // Actually requests relative to task execution. 
+    // If T_High starts at 4, and needs R1 immediately:
+    t1.addResourceRequest('R1', 0, 2);
+
+    updateUI();
+    alert("Priority Inversion Demo Loaded.\nRun with Protocol=NONE to see Inversion.\nRun with Protocol=PIP to see Inheritance.");
+}
+
+function loadDeadlock() {
+    resetSimulation();
+
+    // Task A: P20, C=6. Needs R1 then R2.
+    sched.addTask(new Task('TaskA', 30, 8, 0));
+    let ta = sched.tasks[0]; ta.basePriority = 1; ta.currentPriority = 1; ta.color = '#e67e22';
+
+    // Task B: P20, C=6. Needs R2 then R1.
+    sched.addTask(new Task('TaskB', 30, 8, 2)); // Offset 2 to interleave
+    let tb = sched.tasks[1]; tb.basePriority = 2; tb.currentPriority = 2; tb.color = '#9b59b6';
+
+    sched.addResource(new Resource('R1'));
+    sched.addResource(new Resource('R2'));
+
+    // Nested Locks
+    // Task A: Lock R1 at 1 for 6s. Inside, Lock R2 at 3 for 2s.
+    ta.addResourceRequest('R1', 1, 6);
+    ta.addResourceRequest('R2', 3, 2);
+
+    // Task B: Lock R2 at 1 for 6s. Inside, Lock R1 at 3 for 2s.
+    tb.addResourceRequest('R2', 1, 6);
+    tb.addResourceRequest('R1', 3, 2);
+
+    updateUI();
+    alert("Deadlock Demo Loaded.\nRun with Protocol=NONE to see Deadlock.\nRun with Protocol=PCP to prevent it.");
 }
 
 function handleAddTask(e) {
