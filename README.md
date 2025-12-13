@@ -60,4 +60,5 @@ This is a client-side web application. You do not need NodeJS, Python, or any ba
 
 ## Author
 
+Daniel Ripley-Betts
 Developed for Real-Time Systems Term Project, Fall 2025.
