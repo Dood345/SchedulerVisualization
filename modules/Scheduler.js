@@ -281,15 +281,21 @@ export class Scheduler {
                 res.blockedQueue.forEach(t => {
                     t.state = STATE.READY;
                     t.blockedOn = null;
+                    t.ceilingBlocker = null;
                 });
                 res.blockedQueue = [];
             }
         }
     }
 
-    blockTask(task, resource) {
+    blockTask(task, resource, ceilingHolder = null) {
         task.state = STATE.BLOCKED;
         task.blockedOn = resource.id;
+
+        if (ceilingHolder) {
+            task.ceilingBlocker = ceilingHolder;
+        }
+
         if (!resource.blockedQueue.includes(task)) {
             resource.blockedQueue.push(task);
         }
@@ -322,19 +328,27 @@ export class Scheduler {
         }
 
         // PIP: Inheritance
-        if (this.enablePIP && resource.owner) {
-            const owner = resource.owner;
-            if (task.currentPriority < owner.currentPriority) {
-                // Inherit
-                owner.currentPriority = task.currentPriority;
-                // Propagate? If owner is also blocked...
-                // Recursive inheritance check
-                this.propagatePriority(owner);
+        if (this.enablePIP || this.enablePCP) {
+            // 1. Blocked by Owner
+            if (resource.owner) {
+                const owner = resource.owner;
+                if (task.currentPriority < owner.currentPriority) {
+                    owner.currentPriority = task.currentPriority;
+                    this.propagatePriority(owner);
+                }
+            }
+            // 2. Blocked by Ceiling Holder (PCP only really)
+            if (ceilingHolder) {
+                if (task.currentPriority < ceilingHolder.currentPriority) {
+                    ceilingHolder.currentPriority = task.currentPriority;
+                    this.propagatePriority(ceilingHolder);
+                }
             }
         }
     }
 
     propagatePriority(task) {
+        // Case 1: Blocked on Resource
         if (task.state === STATE.BLOCKED && task.blockedOn) {
             const res = this.resources.get(task.blockedOn);
             if (res && res.owner) {
@@ -343,6 +357,14 @@ export class Scheduler {
                     owner.currentPriority = task.currentPriority;
                     this.propagatePriority(owner);
                 }
+            }
+        }
+        // Case 2: Blocked by Ceiling
+        if (task.state === STATE.BLOCKED && task.ceilingBlocker) {
+            const blocker = task.ceilingBlocker;
+            if (task.currentPriority < blocker.currentPriority) {
+                blocker.currentPriority = task.currentPriority;
+                this.propagatePriority(blocker);
             }
         }
     }
@@ -381,10 +403,12 @@ export class Scheduler {
                 r.blockedQueue.forEach(t => {
                     t.state = STATE.READY;
                     t.blockedOn = null;
+                    t.ceilingBlocker = null;
                 });
                 r.blockedQueue = [];
             }
         });
         task.currentPriority = task.basePriority;
+        task.ceilingBlocker = null;
     }
 }
