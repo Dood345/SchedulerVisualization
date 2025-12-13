@@ -14,20 +14,29 @@
             <h2>RTOS Simulator</h2>
             <div class="status-panel">
                 <div id="statusIndicator" class="status-ok">System OK</div>
+                <div style="margin-top: 5px; font-size: 0.9em;">
+                    Hyperperiod: <strong id="hyperperiodVal">0</strong>
+                </div>
             </div>
 
             <div class="config-section">
                 <h3>Protocol</h3>
-                <div class="radio-group">
-                    <label><input type="radio" name="protocol" value="NONE" checked> None (Inversion)</label>
-                    <label><input type="radio" name="protocol" value="PIP"> PIP (Inheritance)</label>
-                    <label><input type="radio" name="protocol" value="PCP"> PCP (Ceiling)</label>
+                <div class="radio-group toggle-buttons">
+                    <input type="radio" id="proto_none" name="protocol" value="NONE" checked>
+                    <label for="proto_none" title="None (Inversion)">None</label>
+
+                    <input type="radio" id="proto_pip" name="protocol" value="PIP">
+                    <label for="proto_pip" title="PIP (Inheritance)">PIP</label>
+
+                    <input type="radio" id="proto_pcp" name="protocol" value="PCP">
+                    <label for="proto_pcp" title="PCP (Ceiling)">PCP</label>
                 </div>
             </div>
 
             <div class="config-section">
                 <button id="runBtn">Run Simulation</button>
                 <button id="resetBtn" class="secondary">Reset</button>
+                <button id="demoBtn" class="secondary" style="background-color: #f39c12;">Load Demo</button>
             </div>
 
             <div class="config-section">
@@ -38,15 +47,28 @@
                         <input type="text" id="taskId" required placeholder="T1" style="width: 50px;">
                         <input type="color" id="taskColor" value="#3498db" style="width: 40px; padding: 0;">
                     </div>
-                    <div class="form-group row">
-                        <div>
-                            <label>Period (P)</label>
-                            <input type="number" id="taskPeriod" required min="1" value="20">
+                    <div class="form-group">
+                        <label>Period (P)</label>
+                        <input type="number" id="taskPeriod" required min="1" value="20">
+                    </div>
+
+                    <!-- New Instruction Builder -->
+                    <div class="instruction-builder">
+                        <label>Execution Steps (Queue)</label>
+                        <div class="input-group">
+                            <select id="opType">
+                                <option value="COMPUTE">Compute</option>
+                                <option value="LOCK">Lock Resource</option>
+                                <option value="UNLOCK">Unlock Resource</option>
+                            </select>
+                            <input type="number" id="opValNum" placeholder="Duration" min="1">
+                            <select id="opValSel" style="display:none;"></select>
                         </div>
-                        <div>
-                            <label>Cost (C)</label>
-                            <input type="number" id="taskCost" required min="1" value="5">
-                        </div>
+                        <button type="button" id="addOpBtn" class="secondary" style="margin-bottom: 5px;">+ Add
+                            Step</button>
+                        <ul id="newOpsList" class="op-list-preview">
+                            <li style="color: #999; font-style: italic; text-align: center;">No steps added</li>
+                        </ul>
                     </div>
                     <div class="form-group row">
                         <div>
@@ -63,31 +85,23 @@
             </div>
 
             <div class="config-section">
-                <h3>Resource Usage</h3>
-                <form id="resourceForm">
-                    <div class="form-group">
-                        <label>Task</label>
-                        <select id="resTaskSelect"></select>
-                    </div>
-                    <div class="form-group row">
-                        <div>
-                            <label>Res ID</label>
-                            <input type="text" id="resId" placeholder="R1">
+                <div class="config-section">
+                    <h3>Define Resources</h3>
+                    <form id="resourceForm">
+                        <div class="form-group">
+                            <label>Resource ID</label>
+                            <input type="text" id="resId" placeholder="R1" required>
                         </div>
-                        <div>
-                            <label>Start</label>
-                            <input type="number" id="resStart" min="0" value="1" style="width: 50px;">
+                        <div class="form-group">
+                            <label>PCP Priority Ceiling</label>
+                            <input type="number" id="resCeiling" min="1" value="1">
+                            <div class="hint">Highest Priority accessing this.</div>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Duration</label>
-                        <input type="number" id="resDuration" min="1" value="2">
-                    </div>
-                    <button type="submit">Add Lock</button>
-                </form>
-            </div>
+                        <button type="submit">Register Resource</button>
+                    </form>
+                </div>
 
-            <div id="taskList" class="task-list"></div>
+                <div id="taskList" class="task-list"></div>
         </aside>
 
         <main class="main-content">
@@ -95,9 +109,9 @@
                 <h1>Schedule Visualization</h1>
                 <div class="legend">
                     <span class="legend-item"><span class="box running"></span> Run</span>
-                    <span class="legend-item"><span class="box ready"></span> Ready</span>
                     <span class="legend-item"><span class="box blocked"></span> Blocked</span>
-                    <span class="legend-item"><span class="box critical"></span> Critical Section</span>
+                    <span class="legend-item"><span class="box deadlock"></span> Deadlock</span>
+                    <span class="legend-item"><span class="box pip-active"></span> PIP Boost</span>
                 </div>
             </header>
 
@@ -106,11 +120,47 @@
             </div>
 
             <div id="log" class="log-container">
-                <h3>Simulation Log</h3>
-                <div id="logContent"></div>
+                <div class="tabs-nav">
+                    <button class="tab-link active" data-tab="tabDefinitions">Task Definitions</button>
+                    <button class="tab-link" data-tab="tabResources">Resource Status</button>
+                    <button class="tab-link" data-tab="tabLog">Simulation Log</button>
+                </div>
+
+                <div id="tabDefinitions" class="tab-content active">
+                    <div id="taskDetailsTab">
+                        <p class="hint" style="text-align: center; margin-top: 20px;">Add tasks to see their instruction
+                            pipeline here.</p>
+                    </div>
+                </div>
+
+                <div id="tabResources" class="tab-content">
+                    <div id="resourceStatusTab">
+                        <p class="hint">No resources defined.</p>
+                    </div>
+                </div>
+
+                <div id="tabLog" class="tab-content">
+                    <div id="logContent"></div>
+                </div>
             </div>
         </main>
     </div>
+
+    <!-- Scenario Selection Modal -->
+    <div id="scenarioModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Select Simulation Scenario</h3>
+            <p>Choose a preset scenario to load:</p>
+            <div class="modal-actions">
+                <button id="scenarioRMS" class="modal-btn">1. Simple RMS</button>
+                <button id="scenarioInversion" class="modal-btn">2. Priority Inversion Demo</button>
+                <button id="scenarioDeadlock" class="modal-btn">3. Deadlock Poteintial</button>
+            </div>
+            <button id="closeModalBtn" class="secondary" style="margin-top: 15px;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Restored Modular Script -->
     <script type="module" src="main.js"></script>
 </body>
 
