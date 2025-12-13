@@ -17,7 +17,10 @@ const statusInd = document.getElementById('statusIndicator');
 // New UI Elements
 const addOpBtn = document.getElementById('addOpBtn');
 const opTypeSel = document.getElementById('opType');
-const opValIn = document.getElementById('opVal');
+// Split Inputs
+const opValNum = document.getElementById('opValNum');
+const opValSel = document.getElementById('opValSel');
+
 const newOpsList = document.getElementById('newOpsList');
 const tabLinks = document.querySelectorAll('.tab-link');
 
@@ -32,6 +35,7 @@ resourceForm.addEventListener('submit', handleAddResource);
 
 // New UI Listeners
 if (addOpBtn) addOpBtn.addEventListener('click', handleAddOp);
+if (opTypeSel) opTypeSel.addEventListener('change', updateBuilderInputState);
 
 tabLinks.forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -232,33 +236,73 @@ function handleAddTask(e) {
     updateUI();
 }
 
+function updateBuilderInputState() {
+    const type = opTypeSel.value;
+    if (type === 'COMPUTE') {
+        opValNum.style.display = 'block';
+        opValSel.style.display = 'none';
+        opValNum.focus();
+    } else {
+        opValNum.style.display = 'none';
+        opValSel.style.display = 'block';
+        updateResourceDropdown(); // Refresh options
+    }
+}
+
+function updateResourceDropdown() {
+    opValSel.innerHTML = '';
+
+    if (sched.resources.size === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = "add below";
+        opt.disabled = true;
+        opt.selected = true;
+        opValSel.appendChild(opt);
+        return;
+    }
+
+    sched.resources.forEach((res, id) => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = id;
+        opValSel.appendChild(opt);
+    });
+}
+
 function handleAddOp() {
     const type = opTypeSel.value;
-    const val = opValIn.value.trim();
-
-    if (!val) return;
-
-    let op = { type: type };
+    let val = null;
 
     if (type === 'COMPUTE') {
-        const dur = parseInt(val);
-        if (isNaN(dur) || dur <= 0) {
+        val = parseInt(opValNum.value);
+        if (isNaN(val) || val <= 0) {
             alert("Duration must be a positive integer");
             return;
         }
-        op.duration = dur;
     } else {
         // LOCK/UNLOCK
-        if (!val) {
-            alert("Resource ID required");
+        // Check if disabled (no resources)
+        if (opValSel.options.length > 0 && opValSel.options[0].textContent === "add below") {
+            alert("Please define resources in the panel below first.");
             return;
         }
-        op.target = val;
+        val = opValSel.value;
+        if (!val) {
+            alert("Please select a resource.");
+            return;
+        }
     }
 
+    let op = { type: type };
+    if (type === 'COMPUTE') op.duration = val;
+    else op.target = val;
+
     currentInstructions.push(op);
-    opValIn.value = ''; // Clear input
-    opValIn.focus();
+
+    // Clear Input
+    if (type === 'COMPUTE') opValNum.value = '';
+    // Don't clear select, keeps last choice
+
     renderOpsPreview();
 }
 
@@ -288,11 +332,26 @@ window.removeOp = function (idx) {
 
 function handleAddResource(e) {
     e.preventDefault();
-    // This form was "Add Lock". Since we moved to instruction streams,
-    // we can't easily "append" a lock to a compiled instruction list without refactoring the UI flow.
-    // WORKAROUND: We will append LOCK + COMPUTE + UNLOCK to the end of the instructions list?
-    // Or just alert user "Use JSON config for complex scenarios".
-    alert("To add complex locks, please write a JSON scenario. Basic UI only adds COMPUTE tasks.");
+
+    const id = document.getElementById('resId').value.trim();
+    if (!id) return;
+
+    const ceiling = parseInt(document.getElementById('resCeiling').value);
+
+    // Check availability
+    if (sched.resources.has(id)) {
+        alert(`Resource ${id} already exists!`);
+        return;
+    }
+
+    const res = new Resource(id, ceiling);
+    sched.addResource(res);
+
+    // Update UI
+    document.getElementById('resId').value = '';
+    updateUI();
+    // If builder is looking at LOCK/UNLOCK, refresh dropdown
+    if (opTypeSel.value !== 'COMPUTE') updateBuilderInputState();
 }
 
 function runSimulation() {
@@ -359,10 +418,8 @@ function updateUI() {
         `;
     }).join('');
 
-    // Update Resource Select
-    // Update Resource Select
-    const sel = document.getElementById('resTaskSelect');
-    if (sel) sel.innerHTML = sched.tasks.map(t => `<option value="${t.id}">${t.id}</option>`).join('');
+    // Update Resource Select - NO LONGER NEEDED (Form Removed)
+    // But we might want to update potential other lists?
 
     // Update Tabs
     renderTaskDetails();

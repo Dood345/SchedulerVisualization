@@ -56,7 +56,8 @@
                                 <option value="LOCK">Lock Resource</option>
                                 <option value="UNLOCK">Unlock Resource</option>
                             </select>
-                            <input type="text" id="opVal" placeholder="Dur / ResID">
+                            <input type="number" id="opValNum" placeholder="Duration" min="1">
+                            <select id="opValSel" style="display:none;"></select>
                         </div>
                         <button type="button" id="addOpBtn" class="secondary" style="margin-bottom: 5px;">+ Add
                             Step</button>
@@ -79,31 +80,23 @@
             </div>
 
             <div class="config-section">
-                <h3>Resource Usage</h3>
-                <form id="resourceForm">
-                    <div class="form-group">
-                        <label>Task</label>
-                        <select id="resTaskSelect"></select>
-                    </div>
-                    <div class="form-group row">
-                        <div>
-                            <label>Res ID</label>
-                            <input type="text" id="resId" placeholder="R1">
+                <div class="config-section">
+                    <h3>Define Resources</h3>
+                    <form id="resourceForm">
+                        <div class="form-group">
+                            <label>Resource ID</label>
+                            <input type="text" id="resId" placeholder="R1" required>
                         </div>
-                        <div>
-                            <label>Start</label>
-                            <input type="number" id="resStart" min="0" value="1" style="width: 50px;">
+                        <div class="form-group">
+                            <label>PCP Priority Ceiling</label>
+                            <input type="number" id="resCeiling" min="1" value="1">
+                            <div class="hint">Highest Priority accessing this.</div>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Duration</label>
-                        <input type="number" id="resDuration" min="1" value="2">
-                    </div>
-                    <button type="submit">Add Lock</button>
-                </form>
-            </div>
+                        <button type="submit">Register Resource</button>
+                    </form>
+                </div>
 
-            <div id="taskList" class="task-list"></div>
+                <div id="taskList" class="task-list"></div>
         </aside>
 
         <main class="main-content">

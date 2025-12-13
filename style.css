@@ -29,7 +29,7 @@ body {
 
 /* Sidebar */
 .sidebar {
-    width: 320px;
+    width: 350px;
     background-color: var(--sidebar-bg);
     border-right: 1px solid var(--border-color);
     padding: 20px;
@@ -293,11 +293,14 @@ canvas {
 }
 
 .instruction-builder #opType {
-    flex: 2;
+    flex: 1;
+    min-width: 0;
 }
 
-.instruction-builder #opVal {
-    flex: 2;
+.instruction-builder #opValNum,
+.instruction-builder #opValSel {
+    flex: 1;
+    min-width: 0;
 }
 
 .instruction-builder #addOpBtn {
