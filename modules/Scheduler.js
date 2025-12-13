@@ -174,120 +174,116 @@ export class Scheduler {
         if (op.type === 'COMPUTE') {
             task.currentInstructionRemaining--;
             task.remainingTotalCost--;
-
             if (task.currentInstructionRemaining <= 0) {
                 task.pc++;
                 task.loadInstruction();
             }
         }
         else if (op.type === 'LOCK') {
-            const res = this.resources.get(op.target);
-            if (!res) {
-                console.error(`Resource ${op.target} not found!`);
+            // Refactored: Logic moved to helper
+            const success = this.attemptLock(task, op.target);
+            if (success) {
                 task.pc++;
                 task.loadInstruction();
-                return;
             }
-
-            // CHECK: Can we lock?
-            let canLock = false;
-
-            // PCP Logic
-            if (this.enablePCP) {
-                const sysCeil = this.getSystemCeiling();
-                // Rule: Prio > SysCeil (Strictly Higher Prio = Lower Value)
-                // EXCEPT if this task holds the resource that is creating the ceiling.
-                // Simplified: If task doesn't hold any resources, it must be > System Ceiling.
-
-                // We need to know if we hold the resource defining the ceiling.
-                // Hard to check efficiently without tracking 'held resources'.
-                // Standard logic: Current Prio < SysCeil (since Lower Val = Higher Prio)
-
-                if (task.currentPriority < sysCeil) {
-                    canLock = true;
-                } else {
-                    // Check if WE are the one holding the semaphore causing the ceiling?
-                    // (Allow nested locks)
-                    // If we are the owner of the resource that set sysCeil...
-                    let permission = false;
-                    this.resources.forEach(r => {
-                        if (r.isLocked() && r.owner === task && r.ceilingPriority === sysCeil) {
-                            permission = true;
-                        }
-                    });
-                    if (permission) canLock = true;
-                }
-
-                // Also check physical availability
-                if (res.isLocked() && res.owner !== task) canLock = false;
-
-            } else {
-                // Default / PIP: Only check if free
-                if (!res.isLocked() || res.owner === task) {
-                    canLock = true;
-                }
-            }
-
-            if (canLock) {
-                // Acquire
-                if (res.owner !== task) {
-                    res.owner = task;
-                    // console.log(`[${this.currentTime}] ${task.id} Locked ${res.id}`);
-                }
-                task.pc++;
-                task.loadInstruction();
-            } else {
-                // Block
-                this.blockTask(task, res);
-            }
+            // If false, attemptLock already handled the blocking/queueing
         }
         else if (op.type === 'UNLOCK') {
-            const res = this.resources.get(op.target);
-            if (res && res.owner === task) {
-                res.owner = null;
-                // console.log(`[${this.currentTime}] ${task.id} Unlocked ${res.id}`);
-
-                // PIP: Restore Priority?
-                // If we inherited priority, we should drop it.
-                // Standard PIP: Return to base priority OR highest priority of remaining formatted blocked tasks.
-                if (this.enablePIP) {
-                    // Simple PIP: Reset to base. 
-                    // Better PIP: Recalculate based on other locks held?
-                    // For this simple sim, we assume 1 lock at a time or simple nesting.
-                    // Reset to base is safest first step.
-                    // If we hold other locks, we technically should check max(blocked_queue_of_other_locks).
-                    // Let's implement Recalculate.
-
-                    let maxPrioOfBlockers = task.basePriority;
-                    // Check all resources this task still owns
-                    this.resources.forEach(r => {
-                        if (r.owner === task && r.blockedQueue.length > 0) {
-                            // Find highest priority blocked task
-                            r.blockedQueue.forEach(bTask => {
-                                if (bTask.currentPriority < maxPrioOfBlockers) {
-                                    maxPrioOfBlockers = bTask.currentPriority;
-                                }
-                            });
-                        }
-                    });
-                    task.currentPriority = maxPrioOfBlockers;
-                }
-
-                // Wake up waiting tasks
-                // Just move them to READY? Or let Scheduler pick them up?
-                // We clear their blocked state.
-                if (res.blockedQueue.length > 0) {
-                    // Wake all? Or just one?
-                    // Usually just let them retry.
-                    res.blockedQueue.forEach(t => {
-                        t.state = STATE.READY;
-                        t.blockedOn = null;
-                    });
-                    res.blockedQueue = [];
-                }
-            }
+            this.unlockResource(task, op.target);
             task.pc++;
             task.loadInstruction();
+        }
+    }
+
+    attemptLock(task, resourceId) {
+        const res = this.resources.get(resourceId);
+        if (!res) {
+            console.error(`Resource ${resourceId} not found!`);
+            return true; // Skip invalid instruction
+        }
+
+        let canLock = false;
+        let ceilingHolder = null;
+
+        // --- PCP LOGIC ---
+        if (this.enablePCP) {
+            const sysCeil = this.getSystemCeiling();
+
+            // Rule: Priority must be STRICTLY HIGHER (Lower Value) than System Ceiling
+            if (task.currentPriority < sysCeil) {
+                canLock = true;
+            } else {
+                // Exception: Do we hold the lock that is causing this ceiling?
+                let holdsCeiling = false;
+                this.resources.forEach(r => {
+                    if (r.isLocked() && r.owner === task && r.ceilingPriority === sysCeil) {
+                        holdsCeiling = true;
+                    }
+                });
+
+                if (holdsCeiling) {
+                    canLock = true;
+                } else {
+                    // Blocked by Ceiling - Find who to boost
+                    for (let r of this.resources.values()) {
+                        if (r.isLocked() && r.ceilingPriority === sysCeil && r.owner !== task) {
+                            ceilingHolder = r.owner;
+                            break;
+                        }
+                    }
+                }
+            }
+            // Physical Check: Even if PCP says OK, is it physically free?
+            if (res.isLocked() && res.owner !== task) canLock = false;
+
+        } else {
+            // --- DEFAULT / PIP LOGIC ---
+            if (!res.isLocked() || res.owner === task) {
+                canLock = true;
+            }
+        }
+
+        // --- EXECUTE ---
+        if (canLock) {
+            if (res.owner !== task) {
+                res.owner = task;
+            }
+            return true;
+        } else {
+            // Block the task (passing the ceiling holder if applicable)
+            this.blockTask(task, res, ceilingHolder);
+            return false;
+        }
+    }
+
+    unlockResource(task, resourceId) {
+        const res = this.resources.get(resourceId);
+        if (res && res.owner === task) {
+            res.owner = null;
+
+            // Restore Priority Logic
+            if (this.enablePIP || this.enablePCP) {
+                let maxPrioOfBlockers = task.basePriority;
+                this.resources.forEach(r => {
+                    if (r.owner === task && r.blockedQueue.length > 0) {
+                        r.blockedQueue.forEach(bTask => {
+                            if (bTask.currentPriority < maxPrioOfBlockers) {
+                                maxPrioOfBlockers = bTask.currentPriority;
+                            }
+                        });
+                    }
+                });
+                task.currentPriority = maxPrioOfBlockers;
+            }
+
+            // Wake up waiting tasks
+            if (res.blockedQueue.length > 0) {
+                res.blockedQueue.forEach(t => {
+                    t.state = STATE.READY;
+                    t.blockedOn = null;
+                });
+                res.blockedQueue = [];
+            }
         }
     }
 
