@@ -285,6 +285,22 @@ export class Scheduler {
                 });
                 res.blockedQueue = [];
             }
+
+            // PCP: When a resource is unlocked, the System Ceiling drops.
+            // We must wake up tasks that were blocked by the previous ceiling (waiting on ANY free resource).
+            if (this.enablePCP) {
+                this.resources.forEach(r => {
+                    // If blockedQueue has tasks, but resource is FREE, they are ceiling-blocked.
+                    if (!r.owner && r.blockedQueue.length > 0) {
+                        r.blockedQueue.forEach(t => {
+                            t.state = STATE.READY;
+                            t.blockedOn = null;
+                            t.ceilingBlocker = null;
+                        });
+                        r.blockedQueue = [];
+                    }
+                });
+            }
         }
     }
 
@@ -408,6 +424,21 @@ export class Scheduler {
                 r.blockedQueue = [];
             }
         });
+
+        // PCP: System Ceiling Check (release all locks might allow others to run)
+        if (this.enablePCP) {
+            this.resources.forEach(r => {
+                if (!r.owner && r.blockedQueue.length > 0) {
+                    r.blockedQueue.forEach(t => {
+                        t.state = STATE.READY;
+                        t.blockedOn = null;
+                        t.ceilingBlocker = null;
+                    });
+                    r.blockedQueue = [];
+                }
+            });
+        }
+
         task.currentPriority = task.basePriority;
         task.ceilingBlocker = null;
     }
