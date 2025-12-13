@@ -9,69 +9,86 @@ export class Task {
     /**
      * @param {string} id Unique Identifier
      * @param {number} period Task Period (P) - also implies Priority for RMS (Lower P = Higher Priority)
-     * @param {number} cost Computation Cost (C)
+     * @param {number} wcet Worst Case Execution Time (Total C)
      * @param {number} offset Release Offset (default 0)
+     * @param {Array} instructions List of Operations {type, target/duration}
      */
-    constructor(id, period, cost, offset = 0) {
+    constructor(id, period, wcet, offset = 0, instructions = []) {
         this.id = id;
         this.period = parseInt(period);
-        this.cost = parseInt(cost);
+        this.wcet = parseInt(wcet);
         this.offset = parseInt(offset);
-        this.deadline = this.period; // Implicit deadline
+        this.instructions = instructions;
+
+        this.deadline = this.period;
         this.basePriority = this.period; // RMS: Priority = Period (Lower is better)
         this.currentPriority = this.basePriority;
 
         // Dynamic State
         this.state = STATE.COMPLETED;
-        this.remainingCost = 0;
+        this.pc = 0; // Program Counter (Instruction Index)
+        this.currentInstructionRemaining = 0; // Remaining time for COMPUTE op
+
+        this.remainingTotalCost = 0; // Track total WCET progress
         this.nextRelease = this.offset;
         this.absDeadline = 0;
 
         // Logging/Stats
-        this.executedInPeriod = 0;
         this.color = this.getRandomColor();
-
-        // Resource Management
-        this.resourceRequests = []; // Array of {resId, startAt, duration}
         this.blockedOn = null; // Resource ID
-    }
-
-    addResourceRequest(resId, startAt, duration) {
-        this.resourceRequests.push({ resId, startAt, duration });
     }
 
     reset() {
         this.state = (this.offset === 0) ? STATE.READY : STATE.COMPLETED;
-        this.remainingCost = (this.offset === 0) ? this.cost : 0;
+        this.pc = 0;
+        this.currentInstructionRemaining = 0;
+        this.blockedOn = null;
+
+        this.remainingTotalCost = (this.offset === 0) ? this.wcet : 0;
         this.nextRelease = this.offset;
+
         if (this.offset === 0) {
             this.absDeadline = this.period;
             this.nextRelease = this.period;
+            this.loadInstruction();
         } else {
             this.absDeadline = 0;
         }
+
         this.currentPriority = this.basePriority;
-        this.executedInPeriod = 0;
     }
 
     checkRelease(time) {
-        if (time >= this.nextRelease && (time - this.offset) % this.period === 0) {
-            // It's release time. 
-            // Note: If offset=0, time=0 is release. time=20 is release (if p=20).
-            // Simpler check:
+        // If already active, don't re-release
+        if (this.state !== STATE.COMPLETED) {
+            // Missed Deadline check could go here
+            return false;
         }
 
-        // Exact release check:
-        // First release at `offset`. Subsequent at `offset + k * period`.
         if (time === this.nextRelease) {
             this.state = STATE.READY;
-            this.remainingCost = this.cost;
-            this.executedInPeriod = 0;
+            this.pc = 0;
+            this.remainingTotalCost = this.wcet;
+            this.blockedOn = null;
             this.absDeadline = time + this.period;
+
+            this.loadInstruction();
+
             this.nextRelease += this.period;
             return true;
         }
         return false;
+    }
+
+    loadInstruction() {
+        if (this.pc < this.instructions.length) {
+            const op = this.instructions[this.pc];
+            if (op.type === 'COMPUTE') {
+                this.currentInstructionRemaining = op.duration;
+            } else {
+                this.currentInstructionRemaining = 0; // LOCK/UNLOCK break instantly usually, or 1 tick? Assuming instant logic handling in scheduler
+            }
+        }
     }
 
     getRandomColor() {
