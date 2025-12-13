@@ -14,12 +14,37 @@ const taskForm = document.getElementById('taskForm');
 const resourceForm = document.getElementById('resourceForm');
 const statusInd = document.getElementById('statusIndicator');
 
+// New UI Elements
+const addOpBtn = document.getElementById('addOpBtn');
+const opTypeSel = document.getElementById('opType');
+const opValIn = document.getElementById('opVal');
+const newOpsList = document.getElementById('newOpsList');
+const tabLinks = document.querySelectorAll('.tab-link');
+
+let currentInstructions = []; // Builder State
+
 // Event Listeners
 runBtn.addEventListener('click', runSimulation);
 resetBtn.addEventListener('click', resetSimulation);
 if (demoBtn) demoBtn.addEventListener('click', openScenarioModal);
 taskForm.addEventListener('submit', handleAddTask);
-resourceForm.addEventListener('submit', handleAddResource); // This handles "Add Lock" but we might need to change it to "Add Instruction" or just log it? keeping for legacy or partial support
+resourceForm.addEventListener('submit', handleAddResource);
+
+// New UI Listeners
+if (addOpBtn) addOpBtn.addEventListener('click', handleAddOp);
+
+tabLinks.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        // Deactivate all
+        document.querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+        // Activate clicked
+        e.target.classList.add('active');
+        const tabId = e.target.getAttribute('data-tab');
+        document.getElementById(tabId).classList.add('active');
+    });
+});
 
 // Modal Elements
 const modal = document.getElementById('scenarioModal');
@@ -167,9 +192,8 @@ function handleAddTask(e) {
     e.preventDefault();
     const id = document.getElementById('taskId').value;
     const period = parseInt(document.getElementById('taskPeriod').value);
-    const cost = parseInt(document.getElementById('taskCost').value);
     const offset = parseInt(document.getElementById('taskOffset').value);
-    const prio = parseInt(document.getElementById('taskPrio').value); // Ignored in RMS, used for sorting check? No, used for base.
+    // Cost input is gone, used in builder
     const color = document.getElementById('taskColor').value;
 
     if (sched.tasks.find(t => t.id === id)) {
@@ -177,24 +201,90 @@ function handleAddTask(e) {
         return;
     }
 
-    // Default Instruction: Just Compute
-    const instructions = [{ type: 'COMPUTE', duration: cost }];
+    if (currentInstructions.length === 0) {
+        alert("Please add at least one execution step (Instruction)!");
+        return;
+    }
 
-    // Logic: If we want to add locks via the other form, we need a way to push instructions?
-    // For now, simpler to just add default task.
+    // Validate: Cannot end holding a lock
+    let locksHeld = 0;
+    for (let op of currentInstructions) {
+        if (op.type === 'LOCK') locksHeld++;
+        if (op.type === 'UNLOCK') locksHeld--;
+    }
+    if (locksHeld !== 0) {
+        alert("Warning: Task definition ends with locks still held! This may cause issues.");
+        // We allow it, but warn.
+    }
 
-    const t = new Task(id, period, cost, offset, instructions);
-    // Override calculate RMS priority?
-    // t.basePriority = prio; // RMS force? 
-    // Scheduler calculates base as period usually.
-    // But let's allow manual override if UI provides it?
-    // t.basePriority = prio; 
+    // Calculate generic Cost (WCET) for display
+    let totalCost = currentInstructions.reduce((sum, op) => op.type === 'COMPUTE' ? sum + op.duration : sum, 0);
 
+    const t = new Task(id, period, totalCost, offset, [...currentInstructions]); // Copy instructions
     t.color = color;
 
     sched.addTask(t);
+
+    // Reset Form & Builder
+    currentInstructions = [];
+    renderOpsPreview();
+    // Optional: Auto-increment ID?
     updateUI();
 }
+
+function handleAddOp() {
+    const type = opTypeSel.value;
+    const val = opValIn.value.trim();
+
+    if (!val) return;
+
+    let op = { type: type };
+
+    if (type === 'COMPUTE') {
+        const dur = parseInt(val);
+        if (isNaN(dur) || dur <= 0) {
+            alert("Duration must be a positive integer");
+            return;
+        }
+        op.duration = dur;
+    } else {
+        // LOCK/UNLOCK
+        if (!val) {
+            alert("Resource ID required");
+            return;
+        }
+        op.target = val;
+    }
+
+    currentInstructions.push(op);
+    opValIn.value = ''; // Clear input
+    opValIn.focus();
+    renderOpsPreview();
+}
+
+function renderOpsPreview() {
+    if (currentInstructions.length === 0) {
+        newOpsList.innerHTML = '<li style="color: #999; font-style: italic; text-align: center;">No steps added</li>';
+        return;
+    }
+
+    newOpsList.innerHTML = currentInstructions.map((op, idx) => {
+        let txt = '';
+        if (op.type === 'COMPUTE') txt = `⚙️ Compute (${op.duration})`;
+        if (op.type === 'LOCK') txt = `🔒 Lock ${op.target}`;
+        if (op.type === 'UNLOCK') txt = `🔓 Unlock ${op.target}`;
+
+        return `<li>
+            <span>${idx + 1}. ${txt}</span>
+            <span class="remove-op" onclick="removeOp(${idx})">✖</span>
+        </li>`;
+    }).join('');
+}
+
+window.removeOp = function (idx) {
+    currentInstructions.splice(idx, 1);
+    renderOpsPreview();
+};
 
 function handleAddResource(e) {
     e.preventDefault();
@@ -270,8 +360,82 @@ function updateUI() {
     }).join('');
 
     // Update Resource Select
+    // Update Resource Select
     const sel = document.getElementById('resTaskSelect');
-    sel.innerHTML = sched.tasks.map(t => `<option value="${t.id}">${t.id}</option>`).join('');
+    if (sel) sel.innerHTML = sched.tasks.map(t => `<option value="${t.id}">${t.id}</option>`).join('');
+
+    // Update Tabs
+    renderTaskDetails();
+    renderResourceStatus();
+}
+
+function renderTaskDetails() {
+    const container = document.getElementById('taskDetailsTab');
+    if (!container) return;
+
+    if (sched.tasks.length === 0) {
+        container.innerHTML = '<p class="hint" style="text-align: center; margin-top: 20px;">Add tasks to see their instruction pipeline here.</p>';
+        return;
+    }
+
+    container.innerHTML = sched.tasks.map(t => {
+        const flow = t.instructions.map(op => {
+            if (op.type === 'COMPUTE') return `<span class="badge badge-compute">⚙️ ${op.duration}</span>`;
+            if (op.type === 'LOCK') return `<span class="badge badge-lock">🔒 ${op.target}</span>`;
+            if (op.type === 'UNLOCK') return `<span class="badge badge-unlock">🔓 ${op.target}</span>`;
+        }).join('<span class="arrow">→</span>');
+
+        return `
+        <div class="task-spec-card" style="border-left: 4px solid ${t.color}">
+            <div class="spec-header">
+                <strong>${t.id}</strong> 
+                <span class="text-muted">P: ${t.period} | Offset: ${t.offset} | WCET: ${t.wcet}</span>
+            </div>
+            <div class="spec-flow">${flow}</div>
+        </div>`;
+    }).join('');
+}
+
+function renderResourceStatus() {
+    const container = document.getElementById('resourceStatusTab');
+    if (!container) return;
+
+    // We need to inspect the scheduler resources.
+    // The simplified Scheduler.js might not expose "Resource objects" in a single array unless we track them.
+    // sched.resources is a Map.
+
+    if (sched.resources.size === 0) {
+        container.innerHTML = '<p class="hint">No resources known.</p>';
+        return;
+    }
+
+    let rows = '';
+    sched.resources.forEach((res, id) => {
+        let owner = res.owner ? `<strong>${res.owner.id}</strong>` : '<span style="color:#aaa">-</span>';
+        let blocked = res.blockedQueue.length > 0 ? res.blockedQueue.map(t => t.id).join(', ') : '-';
+        let ceiling = res.ceilingPriority < 999999 ? res.ceilingPriority : 'N/A';
+
+        rows += `<tr>
+            <td>${id}</td>
+            <td>${owner}</td>
+            <td>${blocked}</td>
+            <td>${ceiling}</td>
+        </tr>`;
+    });
+
+    container.innerHTML = `
+        <table class="res-table">
+            <thead>
+                <tr>
+                    <th>Resource ID</th>
+                    <th>Current Owner</th>
+                    <th>Blocked Queue</th>
+                    <th>PCP Ceiling</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
 }
 
 function displayLog(history) {

@@ -262,3 +262,196 @@ canvas {
 .modal-btn:hover {
     background-color: #2c3e50;
 }
+
+/* --- New UI: Instruction Builder --- */
+.instruction-builder {
+    background: #f8f9fa;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.instruction-builder label {
+    font-weight: bold;
+    font-size: 0.9em;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.instruction-builder .input-group {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 8px;
+}
+
+.instruction-builder select,
+.instruction-builder input {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+.instruction-builder #opType {
+    flex: 2;
+}
+
+.instruction-builder #opVal {
+    flex: 2;
+}
+
+.instruction-builder #addOpBtn {
+    flex: 1;
+    padding: 5px;
+    margin-top: 0;
+    line-height: 1;
+}
+
+.op-list-preview {
+    list-style: none;
+    max-height: 100px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #eee;
+    padding: 5px;
+}
+
+.op-list-preview li {
+    font-size: 0.85em;
+    padding: 2px 5px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.op-list-preview li:last-child {
+    border-bottom: none;
+}
+
+.op-list-preview li .remove-op {
+    color: #e74c3c;
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 5px;
+}
+
+/* --- New UI: Bottom Panel Tabs --- */
+.log-container {
+    height: 250px;
+    /* Increased height for tables */
+    padding: 0;
+    /* Clear padding for tabs */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.tabs-nav {
+    display: flex;
+    background: #e0e0e0;
+    border-bottom: 1px solid #ccc;
+}
+
+.tab-link {
+    background: none;
+    border: none;
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #555;
+    margin-top: 0;
+    width: auto;
+    border-right: 1px solid #ccc;
+}
+
+.tab-link.active {
+    background: #fff;
+    color: #000;
+    font-weight: bold;
+    border-bottom: 2px solid white;
+    /* Hide border */
+    margin-bottom: -1px;
+}
+
+.tab-content {
+    display: none;
+    padding: 15px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* --- Task Definitions Visuals --- */
+.task-spec-card {
+    background: #fff;
+    border: 1px solid #eee;
+    margin-bottom: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    border-radius: 0 4px 4px 0;
+}
+
+.spec-header {
+    font-size: 0.9em;
+    display: flex;
+    justify-content: space-between;
+}
+
+.spec-flow {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    font-size: 0.85em;
+}
+
+.badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.badge-compute {
+    background-color: #ecf0f1;
+    color: #2c3e50;
+}
+
+.badge-lock {
+    background-color: #ffdad6;
+    color: #c0392b;
+}
+
+.badge-unlock {
+    background-color: #d5f5e3;
+    color: #27ae60;
+}
+
+.arrow {
+    color: #aaa;
+    font-size: 0.8em;
+}
+
+/* --- Resource Status Table --- */
+.res-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+
+.res-table th,
+.res-table td {
+    padding: 6px;
+    border: 1px solid #eee;
+    text-align: left;
+}
+
+.res-table th {
+    background: #f9f9f9;
+}

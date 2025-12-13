@@ -42,15 +42,27 @@
                         <input type="text" id="taskId" required placeholder="T1" style="width: 50px;">
                         <input type="color" id="taskColor" value="#3498db" style="width: 40px; padding: 0;">
                     </div>
-                    <div class="form-group row">
-                        <div>
-                            <label>Period (P)</label>
-                            <input type="number" id="taskPeriod" required min="1" value="20">
+                    <div class="form-group">
+                        <label>Period (P)</label>
+                        <input type="number" id="taskPeriod" required min="1" value="20">
+                    </div>
+
+                    <!-- New Instruction Builder -->
+                    <div class="instruction-builder">
+                        <label>Execution Steps (Queue)</label>
+                        <div class="input-group">
+                            <select id="opType">
+                                <option value="COMPUTE">Compute</option>
+                                <option value="LOCK">Lock Resource</option>
+                                <option value="UNLOCK">Unlock Resource</option>
+                            </select>
+                            <input type="text" id="opVal" placeholder="Dur / ResID">
                         </div>
-                        <div>
-                            <label>Cost (C)</label>
-                            <input type="number" id="taskCost" required min="1" value="5">
-                        </div>
+                        <button type="button" id="addOpBtn" class="secondary" style="margin-bottom: 5px;">+ Add
+                            Step</button>
+                        <ul id="newOpsList" class="op-list-preview">
+                            <li style="color: #999; font-style: italic; text-align: center;">No steps added</li>
+                        </ul>
                     </div>
                     <div class="form-group row">
                         <div>
@@ -110,8 +122,28 @@
             </div>
 
             <div id="log" class="log-container">
-                <h3>Simulation Log</h3>
-                <div id="logContent"></div>
+                <div class="tabs-nav">
+                    <button class="tab-link active" data-tab="tabDefinitions">Task Definitions</button>
+                    <button class="tab-link" data-tab="tabResources">Resource Status</button>
+                    <button class="tab-link" data-tab="tabLog">Simulation Log</button>
+                </div>
+
+                <div id="tabDefinitions" class="tab-content active">
+                    <div id="taskDetailsTab">
+                        <p class="hint" style="text-align: center; margin-top: 20px;">Add tasks to see their instruction
+                            pipeline here.</p>
+                    </div>
+                </div>
+
+                <div id="tabResources" class="tab-content">
+                    <div id="resourceStatusTab">
+                        <p class="hint">No resources defined.</p>
+                    </div>
+                </div>
+
+                <div id="tabLog" class="tab-content">
+                    <div id="logContent"></div>
+                </div>
             </div>
         </main>
     </div>
