@@ -74,45 +74,43 @@ function loadSimpleRMS() {
 
 function loadPriorityInversion() {
     resetSimulation();
-    // Low Priority Task (T_Low) - Holds Resource R1
-    // T_Low (P20, C6)
-    // Timeline: 0-1 Compute, 1-5 Critical Section (Lock R1), 5-6 Compute.
+
+    // T3: Low Priority (Longest Period = 20)
+    // Starts first (Offset 0), grabs the lock.
     const tLow = new Task('T3', 20, 6, 0, [
         { type: 'COMPUTE', duration: 1 },
         { type: 'LOCK', target: 'R1' },
-        { type: 'COMPUTE', duration: 4 },
+        { type: 'COMPUTE', duration: 4 }, // Holds lock for a while
         { type: 'UNLOCK', target: 'R1' },
         { type: 'COMPUTE', duration: 1 }
     ]);
-    tLow.color = '#2ecc71'; // Green
+    tLow.color = '#2ecc71';
     sched.addTask(tLow);
 
-    // Medium Priority Task (T_Med) - Noise
-    // T_Med (P20, C4)
-    // Offset 2 to preempt T_Low inside CS
-    const tMed = new Task('T2', 20, 4, 3, [
+    // T2: Medium Priority (Medium Period = 15)
+    // Arrives at t=3. MUST preempt T3 (because 15 < 20).
+    const tMed = new Task('T2', 15, 4, 3, [
         { type: 'COMPUTE', duration: 4 }
     ]);
-    tMed.color = '#f1c40f'; // Yellow
+    tMed.color = '#f1c40f';
     sched.addTask(tMed);
 
-    // High Priority Task (T_High) - Needs R1
-    // T_High (P20, C4)
-    // Offset 4. Needs R1 immediately (or closely).
-    // Instructions: LOCK(R1), COMPUTE(2), UNLOCK(R1), COMPUTE(2)
-    const tHigh = new Task('T1', 20, 4, 4, [
+    // T1: High Priority (Shortest Period = 10)
+    // Arrives at t=4. Preempts T2.
+    // Tries to lock R1 -> BLOCKS (held by T3).
+    // This allows T2 (Medium) to resume, blocking T1 (High) indefinitely.
+    const tHigh = new Task('T1', 10, 4, 4, [
         { type: 'LOCK', target: 'R1' },
         { type: 'COMPUTE', duration: 2 },
         { type: 'UNLOCK', target: 'R1' },
         { type: 'COMPUTE', duration: 2 }
     ]);
-    tHigh.color = '#e74c3c'; // Red
+    tHigh.color = '#e74c3c';
     sched.addTask(tHigh);
 
-    // Setup Resources
     sched.addResource(new Resource('R1'));
-
     updateUI();
+
     alert("Priority Inversion Demo Loaded.\nRun with Protocol=NONE to see Inversion.\nRun with Protocol=PIP to see Inheritance.");
 }
 
