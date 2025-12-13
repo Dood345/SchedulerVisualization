@@ -19,7 +19,13 @@ export class Task {
         this.period = parseInt(period);
         this.wcet = parseInt(wcet);
         this.offset = parseInt(offset);
-        this.instructions = instructions;
+
+        // Backward Compatibility / Default behavior
+        if (instructions.length === 0 && this.wcet > 0) {
+            this.instructions = [{ type: 'COMPUTE', duration: this.wcet }];
+        } else {
+            this.instructions = instructions;
+        }
 
         this.deadline = this.period;
         this.basePriority = this.period; // RMS: Priority = Period (Lower is better)
