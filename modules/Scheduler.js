@@ -138,16 +138,26 @@ export class Scheduler {
             }
         }
 
-        // 4. Capture History (Snapshot)
-        const snapshot = this.tasks.map(t => ({
-            id: t.id,
-            state: (t === runningTask) ? STATE.RUNNING : (t.state === STATE.RUNNING ? STATE.READY : t.state),
-            // Note: If runningTask finished in this tick, it might show COMPLETED.
-            // If it was running at start of tick, generally we visualize it as running.
-            remaining: t.remainingTotalCost,
-            prio: t.currentPriority,
-            blockedOn: t.blockedOn
-        }));
+        // 4. Record History
+        const snapshot = this.tasks.map(t => {
+            // Identify held resources
+            const held = [];
+            this.resources.forEach(r => {
+                if (r.owner === t) held.push(r.id);
+            });
+
+            return {
+                id: t.id,
+                state: (t === runningTask) ? STATE.RUNNING : (t.state === STATE.RUNNING ? STATE.READY : t.state),
+                // Note: If runningTask finished in this tick, it might show COMPLETED.
+                remaining: t.remainingTotalCost,
+                prio: t.currentPriority,
+                basePrio: t.basePriority,
+                isPriorityBoosted: (t.currentPriority < t.basePriority), // Lower value = Higher priority
+                blockedOn: t.blockedOn,
+                heldResources: held
+            };
+        });
 
         this.history.push({
             time: time,
@@ -291,6 +301,27 @@ export class Scheduler {
         // Deadlock Detection
         if (this.detectDeadlock(task)) {
             this.status = 'DEADLOCK';
+            // Mark all tasks in cycle as DEADLOCKED
+            task.state = STATE.DEADLOCKED;
+
+            // Naive propagation: Try to mark others
+            // Better: detectDeadlock could return the cycle list?
+            // Or just iterate standard blocked tasks?
+            // Simple heuristic: If DEADLOCK state, any task blocked on a DEADLOCKED task is also DEADLOCKED.
+            // We can do a quick pass.
+            let changed = true;
+            while (changed) {
+                changed = false;
+                this.tasks.forEach(t => {
+                    if (t.state === STATE.BLOCKED && t.blockedOn) {
+                        const r = this.resources.get(t.blockedOn);
+                        if (r && r.owner && r.owner.state === STATE.DEADLOCKED) {
+                            t.state = STATE.DEADLOCKED;
+                            changed = true;
+                        }
+                    }
+                });
+            }
             return;
         }
 

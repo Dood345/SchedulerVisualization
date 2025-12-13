@@ -2,7 +2,8 @@ export const STATE = {
     READY: 'READY',
     RUNNING: 'RUNNING',
     BLOCKED: 'BLOCKED',
-    COMPLETED: 'COMPLETED'
+    COMPLETED: 'COMPLETED',
+    DEADLOCKED: 'DEADLOCKED'
 };
 
 export class Task {

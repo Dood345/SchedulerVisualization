@@ -128,26 +128,29 @@ header {
     display: flex;
     gap: 15px;
     font-size: 0.9em;
+    margin-left: 20px;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
     gap: 5px;
+    font-size: 0.9em;
 }
 
 .box {
     width: 15px;
     height: 15px;
     border-radius: 3px;
-    border: 1px solid #999;
+    border: 1px solid #000;
+    margin-right: 5px;
 }
 
+/* Legend - Updated */
 .box.running {
     background-color: #2ecc71;
 }
 
-/* Green generic, logs will use task color */
 .box.ready {
     background-color: #bdc3c7;
     border: 1px dashed #7f8c8d;
@@ -155,9 +158,21 @@ header {
 
 .box.blocked {
     background-color: #e74c3c;
+    opacity: 0.4;
 }
 
-/* Red */
+.box.deadlock {
+    background-color: #e74c3c;
+    opacity: 0.4;
+    background-image: repeating-linear-gradient(45deg, #000 0, #000 1px, transparent 0, transparent 50%);
+    background-size: 10px 10px;
+}
+
+.box.pip-active {
+    border: 3px solid gold;
+    background-color: #fff;
+}
+
 .box.deadline {
     background-color: #000;
 }
