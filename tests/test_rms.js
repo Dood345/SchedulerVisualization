@@ -31,6 +31,8 @@ console.log(`Task B executed ${ticksB} ticks (Expected 5 in 20 units)`);
 
 if (sched.hyperperiod === 20 && ticksA === 6 && ticksB === 5) {
     console.log("\n[SUCCESS] Phase 1 Verification Passed");
+    process.exit(0);
 } else {
     console.log("\n[FAILED] Phase 1 Verification Failed");
+    process.exit(1);
 }
