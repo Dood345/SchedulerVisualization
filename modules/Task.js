@@ -7,95 +7,67 @@ export const STATE = {
 };
 
 export class Task {
-    /**
-     * @param {string} id Unique Identifier
-     * @param {number} period Task Period (P) - also implies Priority for RMS (Lower P = Higher Priority)
-     * @param {number} wcet Worst Case Execution Time (Total C)
-     * @param {number} offset Release Offset (default 0)
-     * @param {Array} instructions List of Operations {type, target/duration}
-     */
-    constructor(id, period, wcet, offset = 0, instructions = []) {
+    constructor(id, period, wcet, offset, segments = []) {
         this.id = id;
-        this.period = parseInt(period);
-        this.wcet = parseInt(wcet);
-        this.offset = parseInt(offset);
+        this.period = period;
+        this.wcet = wcet;
+        this.offset = offset;
 
-        // Backward Compatibility / Default behavior
-        if (instructions.length === 0 && this.wcet > 0) {
-            this.instructions = [{ type: 'COMPUTE', duration: this.wcet }];
-        } else {
-            this.instructions = instructions;
-        }
+        // Data Model: Segments
+        // Example: [{ duration: 5, resources: ['R1'] }]
+        this.segments = segments;
 
-        this.deadline = this.period;
-        this.basePriority = this.period; // RMS: Priority = Period (Lower is better)
+        // Runtime State
+        this.currentSegmentIndex = 0;
+        this.currentSegmentRemaining = 0;
+        this.remainingTotalCost = wcet;
+
+        this.state = (offset === 0) ? STATE.READY : STATE.COMPLETED;
+        this.heldResources = new Set(); // What we explicitly own right now
+
+        // Priority State
+        this.basePriority = period; // RMS Default
         this.currentPriority = this.basePriority;
 
-        // Dynamic State
-        this.state = STATE.COMPLETED;
-        this.pc = 0; // Program Counter (Instruction Index)
-        this.currentInstructionRemaining = 0; // Remaining time for COMPUTE op
+        this.blockedOn = null;      // Resource ID we are waiting for
+        this.ceilingBlocker = null; // Task ID causing PCP block
 
-        this.remainingTotalCost = 0; // Track total WCET progress
-        this.nextRelease = this.offset;
-        this.absDeadline = 0;
-
-        // Logging/Stats
+        this.releaseTime = 0;
+        this.nextDeadline = 0;
         this.color = this.getRandomColor();
-        this.blockedOn = null; // Resource ID
     }
 
     reset() {
-        this.state = (this.offset === 0) ? STATE.READY : STATE.COMPLETED;
-        this.pc = 0;
-        this.currentInstructionRemaining = 0;
-        this.blockedOn = null;
-
+        this.currentSegmentIndex = 0;
+        this.currentSegmentRemaining = 0;
         this.remainingTotalCost = (this.offset === 0) ? this.wcet : 0;
-        this.nextRelease = this.offset;
-
-        if (this.offset === 0) {
-            this.absDeadline = this.period;
-            this.nextRelease = this.period;
-            this.loadInstruction();
-        } else {
-            this.absDeadline = 0;
-        }
-
+        this.state = (this.offset === 0) ? STATE.READY : STATE.COMPLETED;
+        this.heldResources.clear();
         this.currentPriority = this.basePriority;
+        this.blockedOn = null;
+        this.ceilingBlocker = null;
     }
 
     checkRelease(time) {
-        // If already active, don't re-release
-        if (this.state !== STATE.COMPLETED) {
-            // Missed Deadline check could go here
-            return false;
-        }
-
-        if (time === this.nextRelease) {
+        if (time < this.offset) return false;
+        if ((time - this.offset) % this.period === 0) {
             this.state = STATE.READY;
-            this.pc = 0;
+            this.currentSegmentIndex = 0;
+            this.currentSegmentRemaining = 0;
             this.remainingTotalCost = this.wcet;
-            this.blockedOn = null;
-            this.absDeadline = time + this.period;
-
-            this.loadInstruction();
-
-            this.nextRelease += this.period;
+            this.heldResources.clear(); // Safety clear
+            // Prepare first segment
+            if (this.segments.length > 0) {
+                this.currentSegmentRemaining = this.segments[0].duration;
+            }
             return true;
         }
         return false;
     }
 
-    loadInstruction() {
-        if (this.pc < this.instructions.length) {
-            const op = this.instructions[this.pc];
-            if (op.type === 'COMPUTE') {
-                this.currentInstructionRemaining = op.duration;
-            } else {
-                this.currentInstructionRemaining = 0; // LOCK/UNLOCK break instantly usually, or 1 tick? Assuming instant logic handling in scheduler
-            }
-        }
+    getCurrentSegment() {
+        if (this.currentSegmentIndex >= this.segments.length) return null;
+        return this.segments[this.currentSegmentIndex];
     }
 
     getRandomColor() {

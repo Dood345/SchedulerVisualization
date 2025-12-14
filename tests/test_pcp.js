@@ -6,55 +6,47 @@ const sched = new Scheduler();
 sched.addResource(new Resource('R1'));
 sched.addResource(new Resource('R2'));
 
-// Deadlock Scenario (Same as test_deadlock.js)
-const tA = new Task('A', 50, 10, 0); // Low 50, Prio 2
-tA.basePriority = 2; tA.currentPriority = 2;
-tA.addResourceRequest('R1', 0, 10);
-tA.addResourceRequest('R2', 2, 5);
+// ---------------------------------------------------------
+// Task A (Low Priority, Period 50)
+// Original: Cost 10. Offset 0.
+// Requests: R1(0-10), R2(2-7) (Nested R2 inside R1)
+// ---------------------------------------------------------
+// Segments Translation:
+// 1. [0-2ms] Hold R1
+// 2. [2-7ms] Hold R1 + R2 (Duration 5)
+// 3. [7-10ms] Hold R1 (Duration 3)
+const tA = new Task('A', 50, 10, 0, [
+    { duration: 2, resources: ['R1'] },
+    { duration: 5, resources: ['R1', 'R2'] },
+    { duration: 3, resources: ['R1'] }
+]);
+// Force explicit priorities if needed, but RMS (P=50) sets it to 50 automatically.
+// The code relies on smaller number = higher priority.
+// A (50) < B (20) ? No. B is higher priority.
 
-const tB = new Task('B', 20, 10, 1); // High 20, Prio 1
-tB.basePriority = 1; tB.currentPriority = 1;
-tB.addResourceRequest('R2', 0, 10);
-tB.addResourceRequest('R1', 1, 5);
+// ---------------------------------------------------------
+// Task B (High Priority, Period 20)
+// Original: Cost 10. Offset 1.
+// Requests: R2(0-10), R1(1-6) (Nested R1 inside R2)
+// ---------------------------------------------------------
+// Segments Translation:
+// 1. [0-1ms] Hold R2
+// 2. [1-6ms] Hold R2 + R1 (Duration 5)
+// 3. [6-10ms] Hold R2 (Duration 4)
+const tB = new Task('B', 20, 10, 1, [
+    { duration: 1, resources: ['R2'] },
+    { duration: 5, resources: ['R2', 'R1'] },
+    { duration: 4, resources: ['R2'] }
+]);
 
 sched.addTask(tA);
 sched.addTask(tB);
 
-// Enable PCP
+// Enable PCP (and implicitly the PIP logic inside it)
 sched.enablePCP = true;
-sched.enablePIP = false; // PCP implies PIP logic already implemented in simple block found
+sched.enablePIP = false;
 
 console.log("Running Deadlock Scenario WITH PCP...");
-// Ceilings:
-// R1 used by A(2), B(1). Ceiling = 1.
-// R2 used by A(2), B(1). Ceiling = 1.
-
-// T=0: A runs. Wants R1.
-// System Ceiling: None locked (Infinity). 
-// A(2) < Infinity. Access Granted. A locks R1.
-// System Ceiling now = R1.ceiling = 1.
-
-// T=1: B (Prio 1) arrives. Preempts A? 
-// B runs. Wants R2.
-// System Ceiling = 1 (R1 held by A).
-// B Prio = 1.
-// Rule: Prio < SysCeil. 1 < 1? False. (Not strictly higher).
-// Access Denied! B Blocks on PCP (Waiting for A).
-// Inheritance: A inherits B's Prio 1.
-
-// T=1: A runs (Inherited Prio 1).
-// A holds R1. Needs... nothing new yet. Just runs.
-
-// T=2: A needs R2.
-// System Ceiling = 1 (R1). A holds R1.
-// Exception: T holds the resource defining the ceiling?
-// R1 defines ceiling 1. A holds R1.
-// So A can lock R2?
-// If A locks R2, A holds R1, R2.
-// Then A finishes R2, R1.
-// Then B runs.
-
-// Deadlock Prevented!
 
 try {
     const history = sched.run(20);
@@ -67,12 +59,31 @@ try {
         console.log("[SUCCESS] PCP prevented deadlock. Simulation finished.");
     }
 
-    // Check execution
-    // A should run early. B should run after.
-    // T=1: B requested R2 but blocked. A ran.
+    // ---------------------------------------------------------
+    // Verification Logic (T=1)
+    // ---------------------------------------------------------
+    // T=0: A runs, locks R1. System Ceiling = 1 (High).
+    // T=1: B arrives (High Prio). Preempts A.
+    // B tries to execute Seg 1 (Needs R2).
+    // PCP Check: B.prio (20) vs Ceiling (20/High).
+    // Is B strictly higher than Ceiling? No.
+    // Result: B should block on Ceiling. 
+    // NOTE: Locking attempt consumes 1 tick. So T=1 is B (Blocked).
+    // T=2: Scheduler picks A (since B is Refused). A should inherit and run.
+
     let tick1 = history.find(h => h.time === 1);
-    console.log(`T=1 Running: ${tick1.runningTaskId} (Expected A due to PCP block on B)`);
+    let tick2 = history.find(h => h.time === 2);
+
+    console.log(`T=1 Running: ${tick1 ? tick1.runningTaskId : 'None'}`);
+    console.log(`T=2 Running: ${tick2 ? tick2.runningTaskId : 'None'}`);
+
+    if (tick1 && tick1.runningTaskId === 'B' && tick2 && tick2.runningTaskId === 'A') {
+        console.log("[PASS] Correct Behavior: B tried to lock (T=1) and Blocked. A ran at T=2.");
+    } else {
+        console.log("[FAIL] Incorrect Behavior.");
+    }
 
 } catch (e) {
     console.log("Error: " + e.message);
+    console.error(e);
 }

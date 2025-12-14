@@ -44,11 +44,15 @@ export class Scheduler {
 
         // 2. Scan
         this.tasks.forEach(task => {
-            // Check all instructions for LOCK ops
+            // Check all segments for resource usage
             const usedResources = new Set();
-            task.instructions.forEach(op => {
-                if (op.type === 'LOCK') usedResources.add(op.target);
-            });
+            if (task.segments) {
+                task.segments.forEach(seg => {
+                    if (seg.resources) {
+                        seg.resources.forEach(r => usedResources.add(r));
+                    }
+                });
+            }
 
             usedResources.forEach(resId => {
                 const res = this.resources.get(resId);
@@ -111,14 +115,7 @@ export class Scheduler {
         });
 
         // 2. Select Highest Priority Ready/Running Task
-        // Filter: Ready, Running, or Blocked (we check blocked to see if they can unblock... actually blocked stays blocked until event)
-        // We only consider tasks that CAN run. Blocked tasks cannot run.
         let readyTasks = this.tasks.filter(t => t.state === STATE.READY || t.state === STATE.RUNNING);
-
-        // Blocked tasks are managed via waiting queues/events, but we need to check if they caused PIP inheritance.
-        // Actually, PIP inheritance updates happen immediately upon blocking.
-        // So we just trust `currentPriority`.
-
         readyTasks.sort((a, b) => a.currentPriority - b.currentPriority);
 
         let runningTask = readyTasks.length > 0 ? readyTasks[0] : null;
@@ -126,16 +123,7 @@ export class Scheduler {
         // 3. Execution Logic
         if (runningTask) {
             runningTask.state = STATE.RUNNING;
-
-            // Execute Instruction
-            this.executeInstruction(runningTask);
-
-            // If task finished everything?
-            if (runningTask.pc >= runningTask.instructions.length) {
-                this.completeTask(runningTask);
-                // After completion, we might need to re-schedule if it released locks (implied UNLOCK at end?)
-                // Ideally input tasks explicitly UNLOCK. But `completeTask` ensures safety.
-            }
+            this.runTaskLogic(runningTask);
         }
 
         // 4. Record History
@@ -166,32 +154,74 @@ export class Scheduler {
         });
     }
 
-    executeInstruction(task) {
-        if (task.pc >= task.instructions.length) return;
-
-        const op = task.instructions[task.pc];
-
-        if (op.type === 'COMPUTE') {
-            task.currentInstructionRemaining--;
-            task.remainingTotalCost--;
-            if (task.currentInstructionRemaining <= 0) {
-                task.pc++;
-                task.loadInstruction();
-            }
+    runTaskLogic(task) {
+        let segment = task.getCurrentSegment();
+        // 1. Completion Check (Safety catch if called on empty task)
+        if (!segment) {
+            this.completeTask(task);
+            return;
         }
-        else if (op.type === 'LOCK') {
-            // Refactored: Logic moved to helper
-            const success = this.attemptLock(task, op.target);
+
+        // 2. Resource Delta Check
+        // We need to ensure we hold EVERYTHING in segment.resources
+        const required = new Set(segment.resources || []);
+        const missing = [];
+
+        // 2a. Release unneeded resources (Transition from [A,B] -> [A])
+        // If we hold something that is NOT in the new requirement, drop it.
+        const toRelease = [];
+        task.heldResources.forEach(resId => {
+            if (!required.has(resId)) {
+                toRelease.push(resId);
+            }
+        });
+
+        toRelease.forEach(resId => {
+            this.unlockResource(task, resId);
+            task.heldResources.delete(resId);
+        });
+
+        // 2b. Identify Missing Resources
+        required.forEach(reqId => {
+            if (!task.heldResources.has(reqId)) {
+                missing.push(reqId);
+            }
+        });
+
+        // 3. Attempt to Acquire Missing (in order)
+        if (missing.length > 0) {
+            // Try to lock the first missing resource
+            // We only try ONE per tick to simulate standard blocking behavior.
+            const nextRes = missing[0];
+            const success = this.attemptLock(task, nextRes);
+
             if (success) {
-                task.pc++;
-                task.loadInstruction();
+                // Mark as held in Task local state
+                task.heldResources.add(nextRes);
+                // We do NOT decrement time yet; we spent this tick locking.
+                return;
+            } else {
+                // attemptLock already put us in BLOCKED state
+                return;
             }
-            // If false, attemptLock already handled the blocking/queueing
         }
-        else if (op.type === 'UNLOCK') {
-            this.unlockResource(task, op.target);
-            task.pc++;
-            task.loadInstruction();
+
+        // 4. Compute (Only if all resources are held)
+        task.currentSegmentRemaining--;
+        task.remainingTotalCost--;
+
+        // 5. Segment Transition
+        if (task.currentSegmentRemaining <= 0) {
+            task.currentSegmentIndex++;
+            const nextSeg = task.getCurrentSegment();
+
+            if (!nextSeg) {
+                // Task Finished
+                this.completeTask(task);
+            } else {
+                // Load next duration
+                task.currentSegmentRemaining = nextSeg.duration;
+            }
         }
     }
 
@@ -411,11 +441,44 @@ export class Scheduler {
 
     completeTask(task) {
         task.state = STATE.COMPLETED;
-        // Failsafe: Release all locks
+
+        // Release everything we think we hold
+        task.heldResources.forEach(resId => {
+            this.unlockResource(task, resId);
+        });
+        task.heldResources.clear();
+
+        // Release anything the Resource object thinks we hold (Double Safety)
         this.resources.forEach(r => {
             if (r.owner === task) {
-                r.owner = null;
-                // Wake up
+                this.unlockResource(task, r.id);
+            }
+        });
+
+        // Global PCP Wakeup
+        if (this.enablePCP) {
+            // Re-check System Ceiling in case we freed things
+            // Logic inside unlockResource usually handles blockedQueue wakeup.
+            // But we might need to check other resources if system ceiling dropped?
+            // Actually unlockResource(PCP logic) handles this. 
+            // We just ensure all queues are checked if system ceiling dropped.
+            // (Implemented in unlockResource: "if blockedQueue has tasks... they are ceiling blocked")
+        }
+
+        // Just in case, ensure no one is blocked on this completed task
+        this.wakeUpCeilingBlockers();
+
+        task.currentPriority = task.basePriority;
+        task.ceilingBlocker = null;
+    }
+
+    wakeUpCeilingBlockers() {
+        if (!this.enablePCP) return;
+        this.resources.forEach(r => {
+            if (!r.owner && r.blockedQueue.length > 0) {
+                // Potential ceiling unblock
+                // We should probably just trigger a re-eval for them?
+                // Or set them to READY so they try again in next tick.
                 r.blockedQueue.forEach(t => {
                     t.state = STATE.READY;
                     t.blockedOn = null;
@@ -424,22 +487,5 @@ export class Scheduler {
                 r.blockedQueue = [];
             }
         });
-
-        // PCP: System Ceiling Check (release all locks might allow others to run)
-        if (this.enablePCP) {
-            this.resources.forEach(r => {
-                if (!r.owner && r.blockedQueue.length > 0) {
-                    r.blockedQueue.forEach(t => {
-                        t.state = STATE.READY;
-                        t.blockedOn = null;
-                        t.ceilingBlocker = null;
-                    });
-                    r.blockedQueue = [];
-                }
-            });
-        }
-
-        task.currentPriority = task.basePriority;
-        task.ceilingBlocker = null;
     }
 }
