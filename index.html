@@ -53,22 +53,30 @@
                     </div>
 
                     <!-- New Instruction Builder -->
-                    <div class="instruction-builder">
-                        <label>Execution Steps (Queue)</label>
-                        <div class="input-group">
-                            <select id="opType">
-                                <option value="COMPUTE">Compute</option>
-                                <option value="LOCK">Lock Resource</option>
-                                <option value="UNLOCK">Unlock Resource</option>
-                            </select>
-                            <input type="number" id="opValNum" placeholder="Duration" min="1">
-                            <select id="opValSel" style="display:none;"></select>
+                    <!-- New Segment Builder -->
+                    <div class="form-group segment-builder-container">
+                        <label>Execution Segments</label>
+                        
+                        <div class="segment-input-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
+                            <input type="number" id="segDuration" class="form-control" placeholder="Dur (ms)" min="1" style="width: 80px;">
+                            
+                            <div class="dropdown-multiselect" style="flex-grow: 1;">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="resDropdownBtn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 100%; text-align: left;">
+                                    Select Resources
+                                </button>
+                                <div class="dropdown-menu" id="resourceChecklist" aria-labelledby="resDropdownBtn" style="padding: 10px; border: 1px solid #ccc; background: #fff; position: absolute; z-index: 1000; display: none;">
+                                    <!-- Populated via JS -->
+                                </div>
+                            </div>
+                            
+                            <button type="button" id="addSegBtn" class="secondary" style="margin-bottom: 0;">+</button>
                         </div>
-                        <button type="button" id="addOpBtn" class="secondary" style="margin-bottom: 5px;">+ Add
-                            Step</button>
-                        <ul id="newOpsList" class="op-list-preview">
-                            <li style="color: #999; font-style: italic; text-align: center;">No steps added</li>
+
+                        <ul id="segmentList" class="list-group segment-list" style="max-height: 150px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #eee; padding: 5px;">
+                            <li style="color: #999; font-style: italic; text-align: center;">No segments added</li>
                         </ul>
+                        
+                        <input type="hidden" id="taskSegmentsData" value="[]">
                     </div>
                     <div class="form-group row">
                         <div>

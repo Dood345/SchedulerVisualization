@@ -15,16 +15,17 @@ const resourceForm = document.getElementById('resourceForm');
 const statusInd = document.getElementById('statusIndicator');
 
 // New UI Elements
-const addOpBtn = document.getElementById('addOpBtn');
-const opTypeSel = document.getElementById('opType');
-// Split Inputs
-const opValNum = document.getElementById('opValNum');
-const opValSel = document.getElementById('opValSel');
+// New UI Elements
+const addSegBtn = document.getElementById('addSegBtn');
+const segDuration = document.getElementById('segDuration');
+const resDropdownBtn = document.getElementById('resDropdownBtn');
+const resourceChecklist = document.getElementById('resourceChecklist');
+const segmentList = document.getElementById('segmentList');
+const taskSegmentsData = document.getElementById('taskSegmentsData');
 
-const newOpsList = document.getElementById('newOpsList');
 const tabLinks = document.querySelectorAll('.tab-link');
 
-let currentInstructions = []; // Builder State
+let currentSegments = []; // Builder State
 
 // Event Listeners
 runBtn.addEventListener('click', runSimulation);
@@ -34,8 +35,18 @@ taskForm.addEventListener('submit', handleAddTask);
 resourceForm.addEventListener('submit', handleAddResource);
 
 // New UI Listeners
-if (addOpBtn) addOpBtn.addEventListener('click', handleAddOp);
-if (opTypeSel) opTypeSel.addEventListener('change', updateBuilderInputState);
+// New UI Listeners
+if (addSegBtn) addSegBtn.addEventListener('click', handleAddSegment);
+if (resDropdownBtn) resDropdownBtn.addEventListener('click', () => {
+    const isHidden = resourceChecklist.style.display === 'none';
+    resourceChecklist.style.display = isHidden ? 'block' : 'none';
+});
+// Global click to close dropdown
+document.addEventListener('click', (e) => {
+    if (!resDropdownBtn.contains(e.target) && !resourceChecklist.contains(e.target)) {
+        resourceChecklist.style.display = 'none';
+    }
+});
 
 tabLinks.forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -74,25 +85,22 @@ function closeScenarioModal() {
 function loadSimpleRMS() {
     resetSimulation();
     // Task 1: T1, P20, C5, Pri1
-    // Instructions: COMPUTE(5)
     const t1 = new Task('T1', 20, 5, 0, [
-        { type: 'COMPUTE', duration: 5 }
+        { duration: 5, resources: [] }
     ]);
     t1.color = '#9000ffff';
     sched.addTask(t1);
 
     // Task 2: T2, P40, C10, Pri2
-    // Instructions: COMPUTE(10)
     const t2 = new Task('T2', 40, 10, 0, [
-        { type: 'COMPUTE', duration: 10 }
+        { duration: 10, resources: [] }
     ]);
     t2.color = '#00fbffff';
     sched.addTask(t2);
 
     // Task 3: T3, P60, C5, Pri3
-    // Instructions: COMPUTE(5)
     const t3 = new Task('T3', 60, 5, 0, [
-        { type: 'COMPUTE', duration: 5 }
+        { duration: 5, resources: [] }
     ]);
     t3.color = '#eaff00ff';
     sched.addTask(t3);
@@ -105,34 +113,30 @@ function loadPriorityInversion() {
     resetSimulation();
 
     // T3: Low Priority (Longest Period = 20)
-    // Starts first (Offset 0), grabs the lock.
+    // Segments: 1ms (None) -> 4ms (R1) -> 1ms (None)
     const tLow = new Task('T3', 20, 6, 0, [
-        { type: 'COMPUTE', duration: 1 },
-        { type: 'LOCK', target: 'R1' },
-        { type: 'COMPUTE', duration: 4 }, // Holds lock for a while
-        { type: 'UNLOCK', target: 'R1' },
-        { type: 'COMPUTE', duration: 1 }
+        { duration: 1, resources: [] },
+        { duration: 4, resources: ['R1'] },
+        { duration: 1, resources: [] }
     ]);
     tLow.color = '#2ecc71';
     sched.addTask(tLow);
 
     // T2: Medium Priority (Medium Period = 15)
-    // Arrives at t=3. MUST preempt T3 (because 15 < 20).
+    // Segments: 4ms (None)
     const tMed = new Task('T2', 15, 4, 3, [
-        { type: 'COMPUTE', duration: 4 }
+        { duration: 4, resources: [] }
     ]);
     tMed.color = '#f1c40f';
     sched.addTask(tMed);
 
     // T1: High Priority (Shortest Period = 10)
-    // Arrives at t=4. Preempts T2.
-    // Tries to lock R1 -> BLOCKS (held by T3).
-    // This allows T2 (Medium) to resume, blocking T1 (High) indefinitely.
+    // Segments: 0ms -> Needs R1 immediately? Or run 2ms then need R1?
+    // Original: LOCK R1, COMPUTE 2, UNLOCK, COMPUTE 2.
+    // Segment translation: Needs R1 for 2ms. Then free for 2ms.
     const tHigh = new Task('T1', 10, 4, 4, [
-        { type: 'LOCK', target: 'R1' },
-        { type: 'COMPUTE', duration: 2 },
-        { type: 'UNLOCK', target: 'R1' },
-        { type: 'COMPUTE', duration: 2 }
+        { duration: 2, resources: ['R1'] },
+        { duration: 2, resources: [] }
     ]);
     tHigh.color = '#e74c3c';
     sched.addTask(tHigh);
@@ -146,50 +150,45 @@ function loadPriorityInversion() {
 function loadDeadlock() {
     resetSimulation();
 
-    // ---------------------------------------------------------
-    // Scenario: Deadlock Setup
-    // T2 (Low Prio): Holds CS2, wants CS1
-    // T1 (High Prio): Holds CS1, wants CS2
-    // ---------------------------------------------------------
-
     // TASK 2: Low Priority (Period 20)
-    // Starts at t=0.
-    // Logic: Runs a bit, locks CS2, then later tries to lock CS1.
-    const t2 = new Task('T2', 20, 6, 0, [
-        { type: 'COMPUTE', duration: 1 },    // Run for 1ms
-        { type: 'LOCK', target: 'CS2' },     // Lock the first resource
-        { type: 'COMPUTE', duration: 2 },    // Burn time so T1 can arrive and preempt us
-        { type: 'LOCK', target: 'CS1' },     // Try to lock the second resource (Deadlock Trigger)
-        { type: 'COMPUTE', duration: 1 },
-        { type: 'UNLOCK', target: 'CS1' },
-        { type: 'UNLOCK', target: 'CS2' }
+    // Segments: 1ms [] -> 2ms [CS2] -> 1ms [CS1, CS2] (WAIT: Requires [CS2] then [CS1, CS2]?)
+    // Original: LOCK CS2, CMP 2, LOCK CS1...
+    // Correct Segment Logic for Deadlock:
+    // 1. [0-1] None
+    // 2. [1-3] Hold CS2 (2ms)
+    // 3. [3-4] Hold CS2 + CS1 (1ms). (This step blocks if CS1 unavailable).
+    // 4. [4-5] Hold CS2 + CS1 (UNLOCK CS1 implicitly by next segment only holding CS2?)
+    // Actually, explicit UNLOCKs suggest:
+    // Seg 1: 1ms []
+    // Seg 2: 2ms [CS2]
+    // Seg 3: 1ms [CS2, CS1]
+    // Seg 4: 0ms [CS2]? Or just done?
+    // Let's assume simplest deadlock structure:
+    const t2 = new Task('T2', 20, 4, 0, [
+        { duration: 1, resources: [] },
+        { duration: 2, resources: ['CS2'] },
+        { duration: 1, resources: ['CS2', 'CS1'] }
     ]);
     t2.color = '#9b59b6'; // Purple
     sched.addTask(t2);
 
     // TASK 1: High Priority (Period 10)
-    // Starts at t=2 (Offset).
-    // Logic: Arrives AFTER T2 has already locked CS2.
-    // Because P10 < P20, T1 immediately preempts T2 upon arrival.
-    const t1 = new Task('T1', 10, 6, 2, [
-        { type: 'LOCK', target: 'CS1' },     // Lock the resource T2 doesn't have yet
-        { type: 'COMPUTE', duration: 1 },
-        { type: 'LOCK', target: 'CS2' },     // Try to lock the resource T2 ALREADY has -> BLOCKS
-        { type: 'COMPUTE', duration: 2 },
-        { type: 'UNLOCK', target: 'CS2' },
-        { type: 'UNLOCK', target: 'CS1' }
+    // Arrives T=2.
+    // 1. [0-1] Hold CS1.
+    // 2. [1-3] Hold CS1 + CS2.
+    const t1 = new Task('T1', 10, 3, 2, [
+        { duration: 1, resources: ['CS1'] },
+        { duration: 2, resources: ['CS1', 'CS2'] }
     ]);
     t1.color = '#e67e22'; // Orange
     sched.addTask(t1);
 
-    // Resources
-    // Note: Ceiling priority is 1 (Highest possible) for PCP
     sched.addResource(new Resource('CS1', 1));
     sched.addResource(new Resource('CS2', 1));
 
     updateUI();
-    console.log("Deadlock Scenario Loaded: T2(Low) starts first. T1(High) arrives at t=2.");
-    alert("Deadlock Scenario Loaded.\n\nExpected Behavior:\n1. T2 starts, locks CS2.\n2. T1 arrives (t=2), preempts T2, locks CS1.\n3. T1 tries for CS2 -> BLOCKED by T2.\n4. T2 resumes, tries for CS1 -> BLOCKED by T1.\n\nSystem halts.");
+    console.log("Deadlock Scenario Loaded");
+    alert("Deadlock Scenario Loaded.\n\nT2 holds CS2, wants CS1.\nT1 holds CS1, wants CS2.\n\nClassic Circular Wait.");
 }
 
 function handleAddTask(e) {
@@ -197,7 +196,6 @@ function handleAddTask(e) {
     const id = document.getElementById('taskId').value;
     const period = parseInt(document.getElementById('taskPeriod').value);
     const offset = parseInt(document.getElementById('taskOffset').value);
-    // Cost input is gone, used in builder
     const color = document.getElementById('taskColor').value;
 
     if (sched.tasks.find(t => t.id === id)) {
@@ -205,129 +203,93 @@ function handleAddTask(e) {
         return;
     }
 
-    if (currentInstructions.length === 0) {
-        alert("Please add at least one execution step (Instruction)!");
+    if (currentSegments.length === 0) {
+        alert("Please add at least one execution segment!");
         return;
     }
 
-    // Validate: Cannot end holding a lock
-    let locksHeld = 0;
-    for (let op of currentInstructions) {
-        if (op.type === 'LOCK') locksHeld++;
-        if (op.type === 'UNLOCK') locksHeld--;
-    }
-    if (locksHeld !== 0) {
-        alert("Warning: Task definition ends with locks still held! This may cause issues.");
-        // We allow it, but warn.
-    }
-
     // Calculate generic Cost (WCET) for display
-    let totalCost = currentInstructions.reduce((sum, op) => op.type === 'COMPUTE' ? sum + op.duration : sum, 0);
+    let totalCost = currentSegments.reduce((sum, seg) => sum + seg.duration, 0);
 
-    const t = new Task(id, period, totalCost, offset, [...currentInstructions]); // Copy instructions
+    const t = new Task(id, period, totalCost, offset, [...currentSegments]);
     t.color = color;
 
     sched.addTask(t);
 
     // Reset Form & Builder
-    currentInstructions = [];
-    renderOpsPreview();
-    // Optional: Auto-increment ID?
+    currentSegments = [];
+    renderSegmentsPreview();
     updateUI();
 }
 
-function updateBuilderInputState() {
-    const type = opTypeSel.value;
-    if (type === 'COMPUTE') {
-        opValNum.style.display = 'block';
-        opValSel.style.display = 'none';
-        opValNum.focus();
-    } else {
-        opValNum.style.display = 'none';
-        opValSel.style.display = 'block';
-        updateResourceDropdown(); // Refresh options
-    }
-}
-
 function updateResourceDropdown() {
-    opValSel.innerHTML = '';
+    resourceChecklist.innerHTML = '';
 
     if (sched.resources.size === 0) {
-        const opt = document.createElement('option');
-        opt.textContent = "add below";
-        opt.disabled = true;
-        opt.selected = true;
-        opValSel.appendChild(opt);
+        resourceChecklist.innerHTML = '<div style="padding:5px; color:#999;">No Resources defined. Add below.</div>';
         return;
     }
 
     sched.resources.forEach((res, id) => {
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = id;
-        opValSel.appendChild(opt);
+        const div = document.createElement('div');
+        div.style.marginBottom = '5px';
+        div.innerHTML = `
+            <label style="display:flex; align-items:center; cursor:pointer;">
+                <input type="checkbox" value="${id}" class="res-checkbox" style="margin-right:5px;">
+                ${id}
+            </label>
+        `;
+        resourceChecklist.appendChild(div);
     });
 }
 
-function handleAddOp() {
-    const type = opTypeSel.value;
-    let val = null;
-
-    if (type === 'COMPUTE') {
-        val = parseInt(opValNum.value);
-        if (isNaN(val) || val <= 0) {
-            alert("Duration must be a positive integer");
-            return;
-        }
-    } else {
-        // LOCK/UNLOCK
-        // Check if disabled (no resources)
-        if (opValSel.options.length > 0 && opValSel.options[0].textContent === "add below") {
-            alert("Please define resources in the panel below first.");
-            return;
-        }
-        val = opValSel.value;
-        if (!val) {
-            alert("Please select a resource.");
-            return;
-        }
-    }
-
-    let op = { type: type };
-    if (type === 'COMPUTE') op.duration = val;
-    else op.target = val;
-
-    currentInstructions.push(op);
-
-    // Clear Input
-    if (type === 'COMPUTE') opValNum.value = '';
-    // Don't clear select, keeps last choice
-
-    renderOpsPreview();
-}
-
-function renderOpsPreview() {
-    if (currentInstructions.length === 0) {
-        newOpsList.innerHTML = '<li style="color: #999; font-style: italic; text-align: center;">No steps added</li>';
+function handleAddSegment() {
+    const dur = parseInt(segDuration.value);
+    if (isNaN(dur) || dur <= 0) {
+        alert("Duration must be a positive integer");
         return;
     }
 
-    newOpsList.innerHTML = currentInstructions.map((op, idx) => {
-        let txt = '';
-        if (op.type === 'COMPUTE') txt = `⚙️ Compute (${op.duration})`;
-        if (op.type === 'LOCK') txt = `🔒 Lock ${op.target}`;
-        if (op.type === 'UNLOCK') txt = `🔓 Unlock ${op.target}`;
+    // Get checked resources
+    const checked = [];
+    const boxes = resourceChecklist.querySelectorAll('.res-checkbox');
+    boxes.forEach(box => {
+        if (box.checked) checked.push(box.value);
+    });
+
+    const seg = { duration: dur, resources: checked };
+    currentSegments.push(seg);
+
+    // Reset inputs
+    segDuration.value = '';
+    boxes.forEach(box => box.checked = false);
+    resourceChecklist.style.display = 'none';
+
+    renderSegmentsPreview();
+}
+
+function renderSegmentsPreview() {
+    if (currentSegments.length === 0) {
+        segmentList.innerHTML = '<li style="color: #999; font-style: italic; text-align: center;">No segments added</li>';
+        taskSegmentsData.value = '[]';
+        return;
+    }
+
+    segmentList.innerHTML = currentSegments.map((seg, idx) => {
+        const resStr = seg.resources.length > 0 ? `[${seg.resources.join(',')}]` : '(None)';
 
         return `<li>
-            <span>${idx + 1}. ${txt}</span>
+            <span>${idx + 1}. ⏱️ ${seg.duration}ms with ${resStr}</span>
             <span class="remove-op" onclick="removeOp(${idx})">✖</span>
         </li>`;
     }).join('');
+
+    taskSegmentsData.value = JSON.stringify(currentSegments);
 }
 
 window.removeOp = function (idx) {
-    currentInstructions.splice(idx, 1);
-    renderOpsPreview();
+    currentSegments.splice(idx, 1);
+    renderSegmentsPreview();
 };
 
 function handleAddResource(e) {
@@ -350,8 +312,8 @@ function handleAddResource(e) {
     // Update UI
     document.getElementById('resId').value = '';
     updateUI();
-    // If builder is looking at LOCK/UNLOCK, refresh dropdown
-    if (opTypeSel.value !== 'COMPUTE') updateBuilderInputState();
+    // If builder is active, refresh dropdown
+    updateResourceDropdown();
 }
 
 function runSimulation() {
@@ -409,11 +371,16 @@ function updateUI() {
     const list = document.getElementById('taskList');
     list.innerHTML = sched.tasks.map(t => {
         // Show instructions summary
-        let ops = t.instructions.length;
+        // Example: [5ms {R1}] -> [3ms]
+        let summary = t.segments.map(s => {
+            const res = s.resources.length > 0 ? `{${s.resources.join(',')}}` : '';
+            return `[${s.duration}${res}]`;
+        }).join('→');
+
         return `
         <div class="task-item" style="border-left: 5px solid ${t.color}">
             <strong>${t.id}</strong> (P${t.period}, C${t.wcet})<br>
-            <small>${ops} Ops</small>
+            <small style="font-size:0.8em; color:#666;">${summary}</small>
         </div>
         `;
     }).join('');
@@ -436,10 +403,9 @@ function renderTaskDetails() {
     }
 
     container.innerHTML = sched.tasks.map(t => {
-        const flow = t.instructions.map(op => {
-            if (op.type === 'COMPUTE') return `<span class="badge badge-compute">⚙️ ${op.duration}</span>`;
-            if (op.type === 'LOCK') return `<span class="badge badge-lock">🔒 ${op.target}</span>`;
-            if (op.type === 'UNLOCK') return `<span class="badge badge-unlock">🔓 ${op.target}</span>`;
+        const flow = t.segments.map(seg => {
+            const res = seg.resources.length > 0 ? `🔒{${seg.resources.join(',')}}` : '';
+            return `<span class="badge badge-compute">${seg.duration}ms ${res}</span>`;
         }).join('<span class="arrow">→</span>');
 
         return `
