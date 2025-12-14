@@ -127,6 +127,7 @@ export class Scheduler {
         }
 
         // 4. Record History
+        // 4. Record History
         const snapshot = this.tasks.map(t => {
             // Identify held resources
             const held = [];
@@ -152,13 +153,18 @@ export class Scheduler {
             runningTaskId: runningTask ? runningTask.id : null,
             tasks: snapshot
         });
+
+        // 5. Cleanup Completed Tasks (DELAYED until after history)
+        if (runningTask && runningTask.state === STATE.COMPLETED) {
+            this.releaseTaskResources(runningTask);
+        }
     }
 
     runTaskLogic(task) {
         let segment = task.getCurrentSegment();
         // 1. Completion Check (Safety catch if called on empty task)
         if (!segment) {
-            this.completeTask(task);
+            this.markTaskCompleted(task);
             return;
         }
 
@@ -198,8 +204,13 @@ export class Scheduler {
             if (success) {
                 // Mark as held in Task local state
                 task.heldResources.add(nextRes);
-                // We do NOT decrement time yet; we spent this tick locking.
-                return;
+
+                // Optimization: If this was the ONLY missing resource, strictly proceed to compute 
+                // in the same tick (Zero Cost Locking).
+                if (missing.length > 1) {
+                    return;
+                }
+                // else: fall through to Compute
             } else {
                 // attemptLock already put us in BLOCKED state
                 return;
@@ -217,7 +228,7 @@ export class Scheduler {
 
             if (!nextSeg) {
                 // Task Finished
-                this.completeTask(task);
+                this.markTaskCompleted(task);
             } else {
                 // Load next duration
                 task.currentSegmentRemaining = nextSeg.duration;
@@ -439,9 +450,11 @@ export class Scheduler {
         return false;
     }
 
-    completeTask(task) {
+    markTaskCompleted(task) {
         task.state = STATE.COMPLETED;
+    }
 
+    releaseTaskResources(task) {
         // Release everything we think we hold
         task.heldResources.forEach(resId => {
             this.unlockResource(task, resId);
