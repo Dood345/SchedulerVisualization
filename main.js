@@ -367,7 +367,7 @@ function runSimulation() {
     renderer.draw(sched.tasks, history, duration);
 
     // Log output
-    displayLog(history);
+    renderSmartLog(history, sched.resources);
 
     if (sched.status === 'DEADLOCK') {
         statusInd.className = 'status-error';
@@ -412,18 +412,22 @@ function renderTaskDetails() {
     }
 
     container.innerHTML = sched.tasks.map(t => {
-        const flow = t.segments.map(seg => {
+        // Generate Segment Chain
+        const flow = t.segments.map((seg, idx) => {
             const res = seg.resources.length > 0 ? `🔒{${seg.resources.join(',')}}` : '';
             return `<span class="badge badge-compute">${seg.duration}ms ${res}</span>`;
-        }).join('<span class="arrow">→</span>');
+        }).join('<span class="arrow-separator">➔</span>');
 
+        // New Card Layout
         return `
-        <div class="task-spec-card" style="border-left: 4px solid ${t.color}">
-            <div class="spec-header">
-                <strong>${t.id}</strong> 
-                <span class="text-muted">P: ${t.period} | Offset: ${t.offset} | WCET: ${t.wcet}</span>
+        <div class="task-def-card" style="--task-color: ${t.color}">
+            <div class="task-card-header">
+                <span class="task-id-badge">${t.id}</span> 
+                <span class="task-params">P: ${t.period} | Offset: ${t.offset} | WCET: ${t.wcet}</span>
             </div>
-            <div class="spec-flow">${flow}</div>
+            <div class="task-segment-chain">
+                ${flow}
+            </div>
         </div>`;
     }).join('');
 }
@@ -470,15 +474,108 @@ function renderResourceStatus() {
     `;
 }
 
-function displayLog(history) {
-    const logDiv = document.getElementById('logContent');
-    // Filter changes only? or full log?
-    // Full log is cleaner for small duration.
-    logDiv.innerHTML = history.map(h => {
-        let run = h.runningTaskId || '-';
-        // Add Deadlock note?
-        return `<div class="log-entry">T=${h.time}: Run=${run} ${h.tasks.find(t => t.state === 'BLOCKED') ? '(BLOCKED)' : ''}</div>`;
-    }).join('');
+// Replaces displayLog
+function renderSmartLog(history, resourcesMap) {
+    const logContainer = document.getElementById('logContent'); // Use existing ID
+    logContainer.innerHTML = ''; // Clear old logs
+
+    if (!history || history.length === 0) return;
+
+    let previousRunId = null;
+    let consecutiveIdle = 0;
+
+    history.forEach((tickData, index) => {
+        const time = tickData.time;
+        const runId = tickData.runningTaskId;
+
+        // Find the full task object for the running task (if any)
+        const runningTaskSnap = runId ? tickData.tasks.find(t => t.id === runId) : null;
+
+        // --- 1. HANDLE IDLE COMPRESSION ---
+        if (runId === null) {
+            consecutiveIdle++;
+            previousRunId = null;
+            return; // Skip printing for now
+        } else {
+            // If we were idling, print the summary now
+            if (consecutiveIdle > 0) {
+                printLogLine(logContainer, `${time - consecutiveIdle} - ${time}`, "System Idle", "gray");
+                consecutiveIdle = 0;
+            }
+        }
+
+        // --- 2. DETECT EVENTS ---
+
+        // Event A: Context Switch (New task started running)
+        if (runId !== previousRunId && runningTaskSnap.state === 'RUNNING') {
+            printLogLine(logContainer, time, `Context Switch: <strong>${runId}</strong> started executing.`, "green");
+        }
+
+        // Event B: Blocking / Deadlock
+        // Note: The scheduler might set runningTaskId to a task, but that task immediately blocked.
+        // We check the *state* of the 'running' task in the snapshot.
+        if (runningTaskSnap.state === 'BLOCKED') {
+            const blockerResId = runningTaskSnap.blockedOn;
+            // Ceiling blocker logic requires access to Resource state which is hard in history snapshots
+            // unless we captured it. For now, rely on standard resource check.
+
+            let msg = `${runId} blocked.`;
+            let color = "orange";
+
+            if (blockerResId) {
+                // Standard Mutex Case
+                const resOwner = getResourceOwnerAtTime(tickData, blockerResId); // Helper needed
+                msg = `${runId} blocked on resource <strong>${blockerResId}</strong> (held by ${resOwner || '?'})`;
+            } else {
+                // Likely Ceiling Block (if no direct resource blocker but blocked)
+                msg = `${runId} blocked by <strong>System Priority Ceiling</strong>`;
+            }
+
+            printLogLine(logContainer, time, msg, color);
+        }
+
+        // Event C: Deadlock
+        else if (runningTaskSnap.state === 'DEADLOCKED' || runningTaskSnap.state === 'DEADLOCK') {
+            printLogLine(logContainer, time, `<strong>DEADLOCK DETECTED</strong> involving ${runId}`, "red");
+        }
+
+        previousRunId = runId;
+    });
+
+    // Flush trailing idle
+    if (consecutiveIdle > 0) {
+        printLogLine(logContainer, `${history.length - consecutiveIdle} - ${history.length}`, "System Idle", "gray");
+    }
+}
+
+// Helper to print nice lines
+function printLogLine(container, time, message, colorClass) {
+    const div = document.createElement('div');
+    div.style.borderBottom = "1px solid #eee";
+    div.style.padding = "4px 0";
+    div.style.fontFamily = "monospace";
+    div.style.fontSize = "13px";
+
+    // Color coding
+    let color = "#333";
+    if (colorClass === 'red') color = "#d9534f";
+    if (colorClass === 'orange') color = "#f0ad4e";
+    if (colorClass === 'green') color = "#2ecc71"; // Brighter green
+    if (colorClass === 'gray') color = "#999";
+
+    div.innerHTML = `<span style="color:#888; width:70px; display:inline-block;">T=${time}</span> <span style="color:${color}">${message}</span>`;
+    container.appendChild(div);
+}
+
+// Helper to find who owned a resource in a specific snapshot
+function getResourceOwnerAtTime(tickSnapshot, resourceId) {
+    // Look through all tasks in this snapshot to see who holds the resource
+    for (let t of tickSnapshot.tasks) {
+        if (t.heldResources.includes(resourceId)) {
+            return t.id;
+        }
+    }
+    return "Unknown";
 }
 
 // Initial UI
