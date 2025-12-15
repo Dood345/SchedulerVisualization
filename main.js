@@ -75,12 +75,14 @@ const closeModalBtn = document.getElementById('closeModalBtn');
 const scenarioRMSBtn = document.getElementById('scenarioRMS');
 const scenarioInversionBtn = document.getElementById('scenarioInversion');
 const scenarioDeadlockBtn = document.getElementById('scenarioDeadlock');
+const scenarioOverloadBtn = document.getElementById('scenarioOverload');
 
 // Modal Listeners
 if (closeModalBtn) closeModalBtn.addEventListener('click', closeScenarioModal);
 if (scenarioRMSBtn) scenarioRMSBtn.addEventListener('click', () => { loadSimpleRMS(); closeScenarioModal(); });
 if (scenarioInversionBtn) scenarioInversionBtn.addEventListener('click', () => { loadPriorityInversion(); closeScenarioModal(); });
 if (scenarioDeadlockBtn) scenarioDeadlockBtn.addEventListener('click', () => { loadDeadlock(); closeScenarioModal(); });
+if (scenarioOverloadBtn) scenarioOverloadBtn.addEventListener('click', () => { loadOverloadDeadlock(); closeScenarioModal(); });
 
 function openScenarioModal() {
     if (modal) modal.style.display = 'flex';
@@ -153,6 +155,63 @@ function loadPriorityInversion() {
 }
 
 function loadDeadlock() {
+    console.log("Loading Deadlock Test Scenario...");
+    resetSimulation();
+
+    // 2. Define Resources
+    // We manually register them so they exist even before tasks run.
+    // Priorities (for PCP): 1=High, 3=Low.
+    // CS1 & CS3 are used by T3 (High), so Ceiling = 1.
+    // CS2 is used by T2 (Med), so Ceiling = 2.
+    const resources = [
+        { id: 'CS1', ceilingPriority: 1 },
+        { id: 'CS2', ceilingPriority: 2 },
+        { id: 'CS3', ceilingPriority: 1 }
+    ];
+
+    resources.forEach(r => {
+        sched.addResource(new Resource(r.id, r.ceilingPriority));
+    });
+
+    // 3. Define Tasks
+    // Note: basePriority 1 is Highest, 3 is Lowest.
+
+    // --- Task 1 (Low Priority) ---
+    // Timeline: Starts t=0. Locks CS1 at t=0. Tries CS3 at t=5.
+    const t1 = new Task('T1', 30, 10, 0, [
+        { duration: 1, resources: ['CS1'] },       // t1-t8: Hold CS1 (Preempted often)
+        { duration: 1, resources: ['CS1', 'CS3'] } // t8: Needs CS3 while holding CS1
+    ]);
+    t1.basePriority = 3;
+    t1.color = '#eebb55'; // Orange
+    sched.addTask(t1);
+
+    // --- Task 2 (Medium Priority) ---
+    // Timeline: Starts t=1. Locks CS2 at t=1. Tries CS3 at t=4.
+    const t2 = new Task('T2', 20, 8, 1, [
+        { duration: 1, resources: ['CS2'] },       // t3-t7: Hold CS2
+        { duration: 1, resources: ['CS2', 'CS3'] } // t7: Needs CS3 while holding CS2
+    ]);
+    t2.basePriority = 2;
+    t2.color = '#5599ff'; // Blue
+    sched.addTask(t2);
+
+    // --- Task 3 (High Priority) ---
+    // Timeline: Starts t=2. Locks CS3 at t=2. Tries CS1 at t=3.
+    const t3 = new Task('T3', 10, 4, 2, [
+        { duration: 1, resources: ['CS3'] },       // t5-t6: Hold CS3
+        { duration: 1, resources: ['CS3', 'CS1'] } // t6: Needs CS1 while holding CS3
+    ]);
+    t3.basePriority = 1;
+    t3.color = '#dd5555'; // Red
+    sched.addTask(t3);
+
+    updateUI();
+    console.log("Deadlock Scenario Loaded");
+    alert("Complex Deadlock Scenario Loaded.\n\nT1 (Low) holds CS1, wants CS3.\nT2 (Med) holds CS2, wants CS3.\nT3 (High) holds CS3, wants CS1.\n\nDemonstrates chained blocking and circular wait.");
+}
+
+function loadOverloadDeadlock() {
     console.log("Loading Deadlock Test Scenario...");
     resetSimulation();
 
