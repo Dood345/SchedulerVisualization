@@ -493,12 +493,12 @@ function renderSmartLog(history, resourcesMap) {
         // Find the full task object for the running task
         const runningTaskSnap = runId ? currentSnapshot.find(t => t.id === runId) : null;
 
-        // --- 1. DETECT PRIORITY INHERITANCE (Scan all tasks) ---
+        // --- 1. SCAN TASKS (Priority, Blocking, Deadlock) ---
         currentSnapshot.forEach(currTask => {
             // Find this task in the previous tick
             const prevTask = previousSnapshot ? previousSnapshot.find(t => t.id === currTask.id) : null;
 
-            // Check if priority is currently boosted (Current < Base)
+            // A. Priority Inheritance
             if (currTask.isPriorityBoosted) {
                 // Only log if it CHANGED state (wasn't boosted before OR priority value changed)
                 if (!prevTask || !prevTask.isPriorityBoosted || prevTask.prio !== currTask.prio) {
@@ -512,6 +512,38 @@ function renderSmartLog(history, resourcesMap) {
                     printLogLine(logContainer, time,
                         `Priority Restore: ${currTask.id} returned to base priority ${currTask.basePrio}.`,
                         "gray");
+                }
+            }
+
+            // B. Blocking Detection (Transition to BLOCKED)
+            // Log when a task *becomes* blocked
+            if (currTask.state === 'BLOCKED') {
+                if (!prevTask || prevTask.state !== 'BLOCKED') {
+                    const blockerResId = currTask.blockedOn;
+                    const ceilingBlockerId = currTask.ceilingBlocker ? currTask.ceilingBlocker.id : null;
+
+                    let msg = "";
+
+                    if (ceilingBlockerId) {
+                        // PCP Specific Blocking
+                        msg = `<strong>${currTask.id} blocked</strong> by System Ceiling (Ceiling held by ${ceilingBlockerId}).`;
+                    } else if (blockerResId) {
+                        // Standard Mutex Blocking
+                        // Find who owns it RIGHT NOW in this snapshot
+                        const resOwner = getResourceOwnerAtTime(currentSnapshot, blockerResId);
+                        msg = `<strong>${currTask.id} blocked</strong> waiting for resource [${blockerResId}] (held by ${resOwner}).`;
+                    } else {
+                        msg = `${currTask.id} blocked (Reason unknown).`;
+                    }
+
+                    printLogLine(logContainer, time, msg, "orange");
+                }
+            }
+
+            // C. Deadlock Detection
+            if (currTask.state === 'DEADLOCKED' || currTask.state === 'DEADLOCK') {
+                if (!prevTask || (prevTask.state !== 'DEADLOCKED' && prevTask.state !== 'DEADLOCK')) {
+                    printLogLine(logContainer, time, `<strong>DEADLOCK:</strong> ${currTask.id} is stuck in a cycle!`, "red");
                 }
             }
         });
@@ -529,7 +561,7 @@ function renderSmartLog(history, resourcesMap) {
             }
         }
 
-        // --- 3. DETECT EVENTS (Context Switches, Preemption, Blocking) ---
+        // --- 3. DETECT GLOBAL EVENTS ---
 
         // A. DETECT PREEMPTION
         // If the task that was running LAST tick is now READY, it was preempted.
@@ -545,37 +577,11 @@ function renderSmartLog(history, resourcesMap) {
             }
         }
 
-        // B. DETECT BLOCKING
-        // If the task meant to run is marked BLOCKED in the snapshot
-        if (runningTaskSnap.state === 'BLOCKED') {
-            const blockerResId = runningTaskSnap.blockedOn;
-            const ceilingBlockerId = runningTaskSnap.ceilingBlocker ? runningTaskSnap.ceilingBlocker.id : null;
-
-            let msg = "";
-
-            if (ceilingBlockerId) {
-                // PCP Specific Blocking
-                msg = `<strong>${runId} blocked</strong> by System Ceiling (Ceiling held by ${ceilingBlockerId}).`;
-            } else if (blockerResId) {
-                // Standard Mutex Blocking
-                // Find who owns it RIGHT NOW in this snapshot
-                const resOwner = getResourceOwnerAtTime(currentSnapshot, blockerResId);
-                msg = `<strong>${runId} blocked</strong> waiting for resource [${blockerResId}] (held by ${resOwner}).`;
-            } else {
-                msg = `${runId} blocked (Reason unknown).`;
+        // B. STANDARD CONTEXT SWITCH (New task started)
+        if (runId !== previousRunId && runningTaskSnap) {
+            if (runningTaskSnap.state === 'RUNNING' || runningTaskSnap.state === 'COMPLETED') {
+                printLogLine(logContainer, time, `Context Switch: ${runId} started executing.`, "green");
             }
-
-            printLogLine(logContainer, time, msg, "orange");
-        }
-
-        // C. STANDARD CONTEXT SWITCH (New task started)
-        else if (runId !== previousRunId && runningTaskSnap.state === 'RUNNING') {
-            printLogLine(logContainer, time, `Context Switch: ${runId} started executing.`, "green");
-        }
-
-        // D. DEADLOCK
-        else if (runningTaskSnap.state === 'DEADLOCKED') {
-            printLogLine(logContainer, time, `<strong>DEADLOCK:</strong> ${runId} is stuck in a cycle!`, "red");
         }
 
         previousRunId = runId;
