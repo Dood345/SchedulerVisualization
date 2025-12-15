@@ -136,6 +136,24 @@
                     <span class="legend-item"><span class="box blocked"></span> Blocked</span>
                     <span class="legend-item"><span class="box deadlock"></span> Deadlock</span>
                     <span class="legend-item"><span class="box pip-active"></span> PIP Boost</span>
+                    <!-- Deadline Miss Icon (SVG to match Renderer) -->
+                    <span class="legend-item">
+                        <svg width="15" height="15" viewBox="0 0 15 15"
+                            style="margin-right:5px; transform: translateY(2px);">
+                            <defs>
+                                <g id="deadline-icon">
+                                    <line x1="7.5" y1="0" x2="7.5" y2="15" />
+                                    <line x1="4.5" y1="4.5" x2="10.5" y2="10.5" />
+                                    <line x1="10.5" y1="4.5" x2="4.5" y2="10.5" />
+                                </g>
+                            </defs>
+                            <!-- White Outline (Thick) -->
+                            <use href="#deadline-icon" stroke="white" stroke-width="4" stroke-linecap="round" />
+                            <!-- Red Inner (Thin) -->
+                            <use href="#deadline-icon" stroke="red" stroke-width="1.5" stroke-linecap="round" />
+                        </svg>
+                        Deadline Miss
+                    </span>
                 </div>
             </header>
 

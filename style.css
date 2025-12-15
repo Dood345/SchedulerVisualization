@@ -197,7 +197,7 @@ header {
 }
 
 .box.deadline {
-    background-color: #000;
+    background-color: red;
 }
 
 .canvas-container {
