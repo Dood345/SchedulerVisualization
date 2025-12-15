@@ -18,6 +18,13 @@ A web-based simulator for visualizing Real-Time System scheduling algorithms. Th
   - **None (Inversion):** Visualize unbounded Priority Inversion scenarios.
   - **PIP (Inheritance):** Visualize Priority Inheritance Protocol preventing inversion.
   - **PCP (Ceiling):** Visualize Priority Ceiling Protocol preventing deadlocks and daisy-chain blocking.
+- **Deadline Miss Detection:** 
+  - Automatically checks if a task completes within its period.
+  - **Visual:** Marks the exact miss time with a distinct **Red X**.
+  - **Logs:** Alerts the user in the simulation log.
+- **Enhanced Visualization:** 
+  - **Lifelines:** Differentiates between "Preempted" tasks (thin connecting lines) vs. "Blocked" tasks (translucent bars).
+  - **Detailed Tooltips:** Hover over any segment to see exact state (Resources held, blocked reason, priority boost status).
 - **Deadlock Detection:** The simulator halts and visually indicates if a deadlock occurs (circular wait).
 
 ## Getting Started
@@ -28,9 +35,19 @@ This is a client-side web application. You do not need NodeJS, Python, or any ba
 
 ### How to Run
 
-1.  **Clone or Download** this repository.
-2.  Navigate to the project folder.
-3.  **Double-click `index.html`** to open it in your default web browser.
+### How to Run
+> **Note:** Because this project uses modern JavaScript Modules (`import`/`export`), it **cannot** be run by simply double-clicking `index.html`. You must serve it over a local web server to avoid CORS errors.
+
+#### Option 1: VS Code (Recommended)
+1.  Open the project folder in **Visual Studio Code**.
+2.  Install the **Live Server** extension (by Ritwick Dey).
+3.  Right-click `index.html` and select **"Open with Live Server"**.
+
+#### Option 2: Python (No installation required)
+If you have Python installed:
+1.  Open a terminal/command prompt in the project folder.
+2.  Run: `python -m http.server 8000`
+3.  Open your browser to `http://localhost:8000`
 
 ### Usage Guide
 
@@ -40,12 +57,13 @@ This is a client-side web application. You do not need NodeJS, Python, or any ba
     - Click **Register Resource**.
 
 2.  **Add Tasks:**
-    - Enter a Task ID (e.g., `T1`), Period, and Offset.
-    - Use the **Instruction Builder** to define what the task does:
-        - Select `COMPUTE` and enter a duration.
-        - Select `LOCK` or `UNLOCK` and choose a defined resource from the dropdown.
-    - Click **+ Add Step** for each operation.
-    - Finally, click **Add Task** to save it.
+    - Enter a Task ID (e.g., `T1`), Period, Offset, and Priority.
+    - Use the **Segment Builder** to define the task's execution timeline:
+        - **Duration:** Enter how long this segment runs (in ms).
+        - **Resources:** Click the "Resources" button to select any materials (Mutexes) held *during* this segment.
+        - Click the **+** button to add this segment to the task chain.
+    - Repeat for as many segments as needed (e.g., Compute -> Hold R1 -> Compute).
+    - Pick a color and click **Add Task** to save it.
 
 3.  **Select Protocol:**
     - Use the toggle buttons at the top to switch between `None`, `PIP`, or `PCP`.
@@ -56,7 +74,7 @@ This is a client-side web application. You do not need NodeJS, Python, or any ba
     - Check the **Simulation Log** or **Resource Status** tabs at the bottom for more details.
 
 5.  **Load Demos:**
-    - Click the orange **Load Demo** button to try pre-configured scenarios like "Priority Inversion" or "Deadlock".
+    - Click the orange **Load Demo** button to try pre-configured scenarios like "Priority Inversion", "Deadlock", or "Instant Deadlock (Overload)".
 
 ## Author
 
