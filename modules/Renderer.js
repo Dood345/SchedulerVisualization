@@ -98,27 +98,41 @@ export class Renderer {
                 // VISIBILITY CHECK
                 // We draw if:
                 // 1. It is the Running Task (even if COMPLETED now)
-                // 2. It is BLOCKED or DEADLOCKED
-                if (!isRunning && (taskState.state === STATE.READY || taskState.state === STATE.COMPLETED || taskState.state === STATE.RUNNING)) {
-                    // Note: taskState could be RUNNING but not selected (if logic error), but usually Ready.
-                    // If state is RUNNING but not isRunning, it means it's preempted? Or just Ready.
+                // 2. It is BLOCKED or DEADLOCKED or READY (New Lifeline)
+                if (!isRunning && (taskState.state === STATE.COMPLETED)) {
+                    // Completed tasks that are not running don't show history in this tick unless they JUST finished (handled by isRunning=true logic from scheduler history usually)
+                    // But actually, we just want to skip "Past Completed" if we are drawing history? 
+                    // No, history is additive. We are drawing a block at 'tick.time'.
+                    // If at 'tick', the task was COMPLETED, it means it finished. We usually don't draw anything for "done".
                     return;
                 }
 
-                // If it is COMPLETED but isRunning=false (finished previously), we skip above.
-                // If it is COMPLETED and isRunning=true (finished just now), we Draw.
+                // If it's ready, we draw the "Lifeline"
+                const isReady = (!isRunning && taskState.state === STATE.READY);
 
                 let x = CONSTANTS.LABEL_WIDTH + (tick.time * CONSTANTS.TICK_WIDTH);
-                let w = CONSTANTS.TICK_WIDTH; // No gap for continuous look? Or kept spacing? User said "Rectangles".
-                // Continuous looks better for time range.
+                let w = CONSTANTS.TICK_WIDTH;
                 let h = CONSTANTS.ROW_HEIGHT - 10;
                 let yBar = y + 5;
 
                 // Opacity Logic
                 this.ctx.globalAlpha = 1.0;
-                // If Blocked/Deadlocked AND NOT Running (wait, running task can be blocked? No, if blocked it's not runningId)
-                // Actually my new scheduler loops. If runningId is set, it is RUNNING/COMPLETED.
-                // If Blocked, runningId is someone else (or null).
+
+                if (isReady) {
+                    // --- LIFELINE STYLE ---
+                    // Draw a thin line in the middle
+                    let lineH = 4; // Thickness
+                    let lineY = yBar + (h / 2) - (lineH / 2);
+
+                    this.ctx.fillStyle = task.color;
+                    this.ctx.fillRect(x, lineY, w, lineH);
+
+                    // No border for lifeline
+                    this.ctx.globalAlpha = 1.0;
+                    return; // Done for this block
+                }
+
+                // If Blocked/Deadlocked AND NOT Running
                 if (!isRunning && (taskState.state === STATE.BLOCKED || taskState.state === STATE.DEADLOCKED)) {
                     this.ctx.globalAlpha = 0.4;
                 }

@@ -92,23 +92,23 @@ function closeScenarioModal() {
 
 function loadSimpleRMS() {
     resetSimulation();
-    // Task 1: T1, P20, C5, Pri1
-    const t1 = new Task('T1', 20, 5, 0, [
-        { duration: 5, resources: [] }
+    // Task 1: T1, P8, C4, Pri1
+    const t1 = new Task('T1', 8, 4, 0, [
+        { duration: 4, resources: [] }
     ]);
     t1.color = '#9000ffff';
     sched.addTask(t1);
 
-    // Task 2: T2, P40, C10, Pri2
-    const t2 = new Task('T2', 40, 10, 0, [
-        { duration: 10, resources: [] }
+    // Task 2: T2, P16, C4, Pri2
+    const t2 = new Task('T2', 16, 4, 0, [
+        { duration: 4, resources: [] }
     ]);
     t2.color = '#00fbffff';
     sched.addTask(t2);
 
-    // Task 3: T3, P60, C5, Pri3
-    const t3 = new Task('T3', 60, 5, 0, [
-        { duration: 5, resources: [] }
+    // Task 3: T3, P32, C8, Pri3
+    const t3 = new Task('T3', 32, 8, 0, [
+        { duration: 8, resources: [] }
     ]);
     t3.color = '#eaff00ff';
     sched.addTask(t3);
@@ -120,34 +120,31 @@ function loadSimpleRMS() {
 function loadPriorityInversion() {
     resetSimulation();
 
-    // T3: Low Priority (Longest Period = 20)
-    // Segments: 1ms (None) -> 4ms (R1) -> 1ms (None)
-    const tLow = new Task('T3', 20, 6, 0, [
-        { duration: 1, resources: [] },
-        { duration: 4, resources: ['R1'] },
-        { duration: 1, resources: [] }
-    ]);
-    tLow.color = '#2ecc71';
-    sched.addTask(tLow);
-
-    // T2: Medium Priority (Medium Period = 15)
+    // T1: med Priority (Shortest Period = 16)
     // Segments: 4ms (None)
-    const tMed = new Task('T2', 15, 4, 3, [
+    const tMed = new Task('T1', 16, 4, 0, [
         { duration: 4, resources: [] }
     ]);
     tMed.color = '#f1c40f';
     sched.addTask(tMed);
 
-    // T1: High Priority (Shortest Period = 10)
-    // Segments: 0ms -> Needs R1 immediately? Or run 2ms then need R1?
-    // Original: LOCK R1, COMPUTE 2, UNLOCK, COMPUTE 2.
-    // Segment translation: Needs R1 for 2ms. Then free for 2ms.
-    const tHigh = new Task('T1', 10, 4, 4, [
-        { duration: 2, resources: ['R1'] },
-        { duration: 2, resources: [] }
+    // T2: High Priority (Medium Period = 12)
+    // Segments: 2ms (None) -> 2ms (R1) -> 2ms (None)
+    const tHigh = new Task('T2', 12, 4, 0, [
+        { duration: 2, resources: [] },
+        { duration: 2, resources: ['R1'] }
     ]);
     tHigh.color = '#e74c3c';
     sched.addTask(tHigh);
+
+    // T3: Low Priority (Longest Period = 24)
+    // Segments: 1ms (None) -> 4ms (R1) -> 1ms (None)
+    const tLow = new Task('T3', 24, 8, 0, [
+        { duration: 2, resources: [] },
+        { duration: 6, resources: ['R1'] }
+    ]);
+    tLow.color = '#2ecc71';
+    sched.addTask(tLow);
 
     sched.addResource(new Resource('R1'));
     updateUI();
