@@ -16,12 +16,14 @@ const statusInd = document.getElementById('statusIndicator');
 
 // New UI Elements
 // New UI Elements
-const addSegBtn = document.getElementById('addSegBtn');
-const segDuration = document.getElementById('segDuration');
-const resDropdownBtn = document.getElementById('resDropdownBtn');
-const resourceChecklist = document.getElementById('resourceChecklist');
-const segmentList = document.getElementById('segmentList');
+const addSegBtn = document.getElementById('btn-add-segment');
+const segDuration = document.getElementById('seg-duration');
+const resDropdownBtn = document.getElementById('btn-resources');
+const resourceChecklist = document.getElementById('resource-dropdown');
+const resourceListContainer = document.getElementById('resource-list-container');
+const segmentList = document.getElementById('segment-list');
 const taskSegmentsData = document.getElementById('taskSegmentsData');
+const resCountBadge = document.getElementById('res-count');
 
 const tabLinks = document.querySelectorAll('.tab-link');
 
@@ -36,15 +38,21 @@ resourceForm.addEventListener('submit', handleAddResource);
 
 // New UI Listeners
 // New UI Listeners
+// New UI Listeners
 if (addSegBtn) addSegBtn.addEventListener('click', handleAddSegment);
-if (resDropdownBtn) resDropdownBtn.addEventListener('click', () => {
-    const isHidden = resourceChecklist.style.display === 'none';
-    resourceChecklist.style.display = isHidden ? 'block' : 'none';
-});
-// Global click to close dropdown
+
+// Toggle Menu
+if (resDropdownBtn && resourceChecklist) {
+    resDropdownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resourceChecklist.classList.toggle('hidden');
+    });
+}
+
+// Close menu if clicking OUTSIDE of it
 document.addEventListener('click', (e) => {
-    if (!resDropdownBtn.contains(e.target) && !resourceChecklist.contains(e.target)) {
-        resourceChecklist.style.display = 'none';
+    if (resDropdownBtn && resourceChecklist && !resDropdownBtn.contains(e.target) && !resourceChecklist.contains(e.target)) {
+        resourceChecklist.classList.add('hidden');
     }
 });
 
@@ -223,24 +231,36 @@ function handleAddTask(e) {
 }
 
 function updateResourceDropdown() {
-    resourceChecklist.innerHTML = '';
+    resourceListContainer.innerHTML = '';
 
     if (sched.resources.size === 0) {
-        resourceChecklist.innerHTML = '<div style="padding:5px; color:#999;">No Resources defined. Add below.</div>';
+        resourceListContainer.innerHTML = '<div class="empty-msg">No resources defined. Add below.</div>';
         return;
     }
 
     sched.resources.forEach((res, id) => {
-        const div = document.createElement('div');
-        div.style.marginBottom = '5px';
-        div.innerHTML = `
-            <label style="display:flex; align-items:center; cursor:pointer;">
-                <input type="checkbox" value="${id}" class="res-checkbox" style="margin-right:5px;">
-                ${id}
-            </label>
+        const option = document.createElement('div'); // Changed from label to div
+        option.className = 'res-option';
+        option.dataset.value = id; // Store ID in data attribute
+        option.innerHTML = `
+            ${id} (Priority Ceiling: ${res.ceilingPriority})
         `;
-        resourceChecklist.appendChild(div);
+
+        // Click to toggle selection
+        option.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent closing menu
+            option.classList.toggle('selected');
+            updateBadgeCount();
+        });
+
+        resourceListContainer.appendChild(option);
     });
+    updateBadgeCount();
+}
+
+function updateBadgeCount() {
+    const selected = resourceListContainer.querySelectorAll('.res-option.selected');
+    if (resCountBadge) resCountBadge.textContent = selected.length;
 }
 
 function handleAddSegment() {
@@ -250,11 +270,11 @@ function handleAddSegment() {
         return;
     }
 
-    // Get checked resources
+    // Get checked resources (from .selected class)
     const checked = [];
-    const boxes = resourceChecklist.querySelectorAll('.res-checkbox');
-    boxes.forEach(box => {
-        if (box.checked) checked.push(box.value);
+    const selectedOptions = resourceListContainer.querySelectorAll('.res-option.selected');
+    selectedOptions.forEach(opt => {
+        checked.push(opt.dataset.value);
     });
 
     const seg = { duration: dur, resources: checked };
@@ -262,8 +282,12 @@ function handleAddSegment() {
 
     // Reset inputs
     segDuration.value = '';
-    boxes.forEach(box => box.checked = false);
-    resourceChecklist.style.display = 'none';
+
+    // Clear selections
+    selectedOptions.forEach(opt => opt.classList.remove('selected'));
+    updateBadgeCount();
+
+    resourceChecklist.classList.add('hidden'); // Close menu
 
     renderSegmentsPreview();
 }
@@ -276,12 +300,12 @@ function renderSegmentsPreview() {
     }
 
     segmentList.innerHTML = currentSegments.map((seg, idx) => {
-        const resStr = seg.resources.length > 0 ? `[${seg.resources.join(',')}]` : '(None)';
+        const resStr = seg.resources.length > 0 ? `[${seg.resources.join(',')}]` : '';
 
-        return `<li>
-            <span>${idx + 1}. ⏱️ ${seg.duration}ms with ${resStr}</span>
+        return `<div class="segment-item">
+            <span>${idx + 1}. ⏱️ ${seg.duration}ms ${resStr}</span>
             <span class="remove-op" onclick="removeOp(${idx})">✖</span>
-        </li>`;
+        </div>`;
     }).join('');
 
     taskSegmentsData.value = JSON.stringify(currentSegments);

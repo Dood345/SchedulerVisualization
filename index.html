@@ -54,28 +54,38 @@
 
                     <!-- New Instruction Builder -->
                     <!-- New Segment Builder -->
+                    <!-- New Segment Builder (Refined) -->
                     <div class="form-group segment-builder-container">
                         <label>Execution Segments</label>
-                        
-                        <div class="segment-input-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
-                            <input type="number" id="segDuration" class="form-control" placeholder="Dur (ms)" min="1" style="width: 80px;">
-                            
-                            <div class="dropdown-multiselect" style="flex-grow: 1;">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="resDropdownBtn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 100%; text-align: left;">
-                                    Select Resources
+
+                        <div class="segment-input-group">
+                            <div class="input-wrapper">
+                                <input type="number" id="seg-duration" placeholder="ms" min="1" class="compact-input">
+                                <span class="unit-label">ms</span>
+                            </div>
+
+                            <div class="resource-wrapper">
+                                <button type="button" id="btn-resources" class="btn-secondary btn-compact">
+                                    <span class="icon">⚙️</span> Resources <span id="res-count" class="badge">0</span>
                                 </button>
-                                <div class="dropdown-menu" id="resourceChecklist" aria-labelledby="resDropdownBtn" style="padding: 10px; border: 1px solid #ccc; background: #fff; position: absolute; z-index: 1000; display: none;">
-                                    <!-- Populated via JS -->
+
+                                <div id="resource-dropdown" class="dropdown-content hidden">
+                                    <div class="dropdown-header">Select Resources:</div>
+                                    <div id="resource-list-container">
+                                        <div class="empty-msg">No resources defined</div>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            <button type="button" id="addSegBtn" class="secondary" style="margin-bottom: 0;">+</button>
+
+                            <button type="button" id="btn-add-segment" class="btn-success btn-icon">
+                                +
+                            </button>
                         </div>
 
-                        <ul id="segmentList" class="list-group segment-list" style="max-height: 150px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #eee; padding: 5px;">
-                            <li style="color: #999; font-style: italic; text-align: center;">No segments added</li>
-                        </ul>
-                        
+                        <div id="segment-list" class="segment-list-container">
+                            <div class="empty-state">No segments added</div>
+                        </div>
+
                         <input type="hidden" id="taskSegmentsData" value="[]">
                     </div>
                     <div class="form-group row">

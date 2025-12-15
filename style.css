@@ -263,8 +263,8 @@ canvas {
     background-color: #2c3e50;
 }
 
-/* --- New UI: Instruction Builder --- */
-.instruction-builder {
+/* --- New UI: Instruction Builder (Refined Segment Builder) --- */
+.segment-builder-container {
     background: #f8f9fa;
     padding: 10px;
     border: 1px solid #ddd;
@@ -272,79 +272,227 @@ canvas {
     margin-bottom: 10px;
 }
 
-.instruction-builder label {
-    font-weight: bold;
-    font-size: 0.9em;
-    display: block;
-    margin-bottom: 5px;
-}
-
-.instruction-builder .input-group {
+/* 1. Flex Row Layout */
+.segment-input-group {
     display: flex;
-    gap: 5px;
-    margin-bottom: 8px;
+    gap: 8px;
+    /* Space between controls */
+    align-items: center;
+    margin-bottom: 10px;
+    position: relative;
+    /* Safety */
 }
 
-.instruction-builder select,
-.instruction-builder input {
-    padding: 5px;
+/* Fix input heights */
+.compact-input,
+.btn-compact,
+.btn-icon {
+    height: 36px;
+    box-sizing: border-box;
+    /* Critical for alignment */
+}
+
+/* 2. Duration Input */
+.input-wrapper {
+    position: relative;
+    flex: 0 0 90px;
+}
+
+.compact-input {
+    width: 100%;
+    padding-right: 25px;
+    /* Room for 'ms' */
     border: 1px solid #ccc;
-    border-radius: 3px;
+    border-radius: 4px;
+    font-size: 14px;
 }
 
-.instruction-builder #opType {
-    flex: 1;
-    min-width: 0;
+.unit-label {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999;
+    font-size: 11px;
+    pointer-events: none;
 }
 
-.instruction-builder #opValNum,
-.instruction-builder #opValSel {
+/* 3. Resource Dropdown Wrapper */
+.resource-wrapper {
+    position: relative;
+    /* Anchor for dropdown */
     flex: 1;
-    min-width: 0;
+    /* Takes remaining width */
 }
 
-.instruction-builder #addOpBtn {
-    flex: 1;
-    padding: 5px;
+.btn-compact {
+    width: 100%;
+    background-color: #f8f9fa;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    /* Pushes text and badge apart */
+    align-items: center;
+    padding: 0 10px;
+    font-size: 13px;
+    color: #333;
+    transition: background 0.2s;
+}
+
+.btn-compact:hover {
+    background-color: #e2e6ea;
+}
+
+/* 4. Floating Dropdown Menu */
+.dropdown-content {
+    position: absolute;
+    top: 100%;
+    /* Push it directly below button */
+    left: 0;
+    right: 0;
+    /* Match width of button */
+    margin-top: 4px;
+    /* Tiny gap */
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    /* Nice shadow depth */
+    z-index: 100;
+    /* Float above everything else */
+    padding: 8px 0;
+    min-width: 150px;
+    /* Prevent it from being too squished */
+}
+
+.hidden {
+    display: none;
+}
+
+.dropdown-header {
+    padding: 4px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #999;
+    font-weight: bold;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 4px;
+}
+
+.res-option {
+    /* Dynamic items */
+    display: block;
+    /* Make label fill the row */
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
+    /* Prevent text selection */
+}
+
+.res-option:hover {
+    background-color: #f0f7ff;
+    /* Light blue hover */
+}
+
+.res-option.selected {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Hide checkbox if present (we will remove it in JS, but safety first) */
+.res-option input {
+    display: none;
+}
+
+.empty-msg {
+    padding: 8px 12px;
+    color: #999;
+    font-style: italic;
+    font-size: 12px;
+}
+
+.badge {
+    background: #6c757d;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 14px;
+    text-align: center;
+}
+
+/* 5. Add Button */
+.btn-icon {
+    flex: 0 0 36px;
+    /* Square */
+    width: 36px;
+    background-color: #28a745;
+    /* Green */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 2px;
     margin-top: 0;
-    line-height: 1;
+    /* Override generic button margin */
 }
 
-.op-list-preview {
-    list-style: none;
-    max-height: 100px;
+.btn-icon:hover {
+    background-color: #218838;
+}
+
+/* Segment List Container */
+.segment-list-container {
+    background: #fafafa;
+    border: 1px dashed #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    min-height: 40px;
+    max-height: 150px;
     overflow-y: auto;
-    background: #fff;
-    border: 1px solid #eee;
-    padding: 5px;
+    font-size: 13px;
+    color: #666;
 }
 
-.op-list-preview li {
-    font-size: 0.85em;
-    padding: 2px 5px;
+.segment-list-container ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.segment-list-container li {
+    padding: 4px 0;
     border-bottom: 1px solid #eee;
     display: flex;
     justify-content: space-between;
-    align-items: center;
 }
 
-.op-list-preview li:last-child {
-    border-bottom: none;
-}
-
-.op-list-preview li .remove-op {
+.segment-list-container .remove-op {
     color: #e74c3c;
     cursor: pointer;
-    font-weight: bold;
-    margin-left: 5px;
+    margin-left: 10px;
 }
 
-/* --- New UI: Bottom Panel Tabs --- */
+.empty-state {
+    text-align: center;
+    font-style: italic;
+    color: #999;
+    margin-top: 10px;
+}
+
+/* --- New UI: Bottom Panel Tabs (Restored & Fixed) --- */
 .log-container {
     height: 250px;
-    /* Increased height for tables */
     padding: 0;
-    /* Clear padding for tabs */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -357,7 +505,8 @@ canvas {
 }
 
 .tab-link {
-    background: none;
+    background: transparent;
+    /* Reset global button */
     border: none;
     padding: 8px 15px;
     cursor: pointer;
@@ -366,6 +515,8 @@ canvas {
     margin-top: 0;
     width: auto;
     border-right: 1px solid #ccc;
+    border-radius: 0;
+    font-weight: normal;
 }
 
 .tab-link.active {
@@ -373,8 +524,12 @@ canvas {
     color: #000;
     font-weight: bold;
     border-bottom: 2px solid white;
-    /* Hide border */
     margin-bottom: -1px;
+}
+
+.tab-link:hover {
+    background-color: #f1f1f1;
+    opacity: 1;
 }
 
 .tab-content {
@@ -386,59 +541,6 @@ canvas {
 
 .tab-content.active {
     display: block;
-}
-
-/* --- Task Definitions Visuals --- */
-.task-spec-card {
-    background: #fff;
-    border: 1px solid #eee;
-    margin-bottom: 8px;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    border-radius: 0 4px 4px 0;
-}
-
-.spec-header {
-    font-size: 0.9em;
-    display: flex;
-    justify-content: space-between;
-}
-
-.spec-flow {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-wrap: wrap;
-    font-size: 0.85em;
-}
-
-.badge {
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: monospace;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.badge-compute {
-    background-color: #ecf0f1;
-    color: #2c3e50;
-}
-
-.badge-lock {
-    background-color: #ffdad6;
-    color: #c0392b;
-}
-
-.badge-unlock {
-    background-color: #d5f5e3;
-    color: #27ae60;
-}
-
-.arrow {
-    color: #aaa;
-    font-size: 0.8em;
 }
 
 /* --- Resource Status Table --- */
