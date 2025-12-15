@@ -339,6 +339,8 @@ canvas {
     font-size: 13px;
     color: #333;
     transition: background 0.2s;
+    margin-top: 0;
+    /* Remove generic button margin for perfect alignment */
 }
 
 .btn-compact:hover {
