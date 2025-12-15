@@ -185,6 +185,33 @@ export class Renderer {
                     }
                 }
             });
+
+            // Draw Deadline Miss Markers for this task
+            history.forEach(tick => {
+                if (tick.events) {
+                    tick.events.forEach(evt => {
+                        if (evt.type === 'DEADLINE_MISS' && evt.taskId === task.id) {
+                            let missX = CONSTANTS.LABEL_WIDTH + (tick.time * CONSTANTS.TICK_WIDTH);
+
+                            // Draw a distinct red vertical marker
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(missX, y);
+                            this.ctx.lineTo(missX, y + CONSTANTS.ROW_HEIGHT);
+                            this.ctx.strokeStyle = "red";
+                            this.ctx.lineWidth = 3;
+                            this.ctx.stroke();
+
+                            // Optional: 'X' mark
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(missX - 5, y + 15);
+                            this.ctx.lineTo(missX + 5, y + 5);
+                            this.ctx.moveTo(missX + 5, y + 15);
+                            this.ctx.lineTo(missX - 5, y + 5);
+                            this.ctx.stroke();
+                        }
+                    });
+                }
+            });
         });
     }
 

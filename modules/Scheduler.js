@@ -106,8 +106,27 @@ export class Scheduler {
     tick(time) {
         this.currentTime = time;
 
-        // 1. Check Arrivals (Release Tasks)
+        // 1. Check Arrivals (Release Tasks) & Detect Deadline Misses
+        const dailyEvents = []; // Events for this tick
+
         this.tasks.forEach(task => {
+            // Check if WE ARE AT A PERIOD BOUNDARY (Release time)
+            // But exclude t=0 (Initial release is not a miss)
+            const isReleaseTime = (time >= task.offset) && ((time - task.offset) % task.period === 0);
+
+            if (isReleaseTime && time > task.offset) {
+                // If it's a release time (and not the very first one), did we finish the previous job?
+                // The task resets on release, so we must check NOW.
+                // A task is "Done" if state is COMPLETED. 
+                // Any other state (READY, RUNNING, BLOCKED) means we simply didn't finish.
+                if (task.state !== STATE.COMPLETED) {
+                    dailyEvents.push({ type: 'DEADLINE_MISS', taskId: task.id });
+                    // We do NOT stop the simulation, we let it reset and scramble (soft real-time / failure mode)
+                    // Or we could break? Standard schedulability analysis says system fails.
+                    // Visualizer should continue to show the mess.
+                }
+            }
+
             if (task.checkRelease(time)) {
                 // Task Released
                 task.currentPriority = task.basePriority;
@@ -191,7 +210,8 @@ export class Scheduler {
         this.history.push({
             time: time,
             runningTaskId: runningTask ? runningTask.id : null,
-            tasks: snapshot
+            tasks: snapshot,
+            events: dailyEvents
         });
 
         // 5. Cleanup Completed Tasks (DELAYED until after history)
