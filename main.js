@@ -153,46 +153,63 @@ function loadPriorityInversion() {
 }
 
 function loadDeadlock() {
+    console.log("Loading Deadlock Test Scenario...");
     resetSimulation();
 
-    // TASK 2: Low Priority (Period 20)
-    // Segments: 1ms [] -> 2ms [CS2] -> 1ms [CS1, CS2] (WAIT: Requires [CS2] then [CS1, CS2]?)
-    // Original: LOCK CS2, CMP 2, LOCK CS1...
-    // Correct Segment Logic for Deadlock:
-    // 1. [0-1] None
-    // 2. [1-3] Hold CS2 (2ms)
-    // 3. [3-4] Hold CS2 + CS1 (1ms). (This step blocks if CS1 unavailable).
-    // 4. [4-5] Hold CS2 + CS1 (UNLOCK CS1 implicitly by next segment only holding CS2?)
-    // Actually, explicit UNLOCKs suggest:
-    // Seg 1: 1ms []
-    // Seg 2: 2ms [CS2]
-    // Seg 3: 1ms [CS2, CS1]
-    // Seg 4: 0ms [CS2]? Or just done?
-    // Let's assume simplest deadlock structure:
-    const t2 = new Task('T2', 20, 2, 0, [
-        { duration: 1, resources: ['CS2'] },
-        { duration: 1, resources: ['CS2', 'CS1'] }
-    ]);
-    t2.color = '#9b59b6'; // Purple
-    sched.addTask(t2);
+    // 2. Define Resources
+    // We manually register them so they exist even before tasks run.
+    // Priorities (for PCP): 1=High, 3=Low.
+    // CS1 & CS3 are used by T3 (High), so Ceiling = 1.
+    // CS2 is used by T2 (Med), so Ceiling = 2.
+    const resources = [
+        { id: 'CS1', ceilingPriority: 1 },
+        { id: 'CS2', ceilingPriority: 2 },
+        { id: 'CS3', ceilingPriority: 1 }
+    ];
 
-    // TASK 1: High Priority (Period 10)
-    // Arrives T=2.
-    // 1. [0-1] Hold CS1.
-    // 2. [1-3] Hold CS1 + CS2.
-    const t1 = new Task('T1', 10, 2, 1, [
-        { duration: 1, resources: ['CS1'] },
-        { duration: 1, resources: ['CS1', 'CS2'] }
+    resources.forEach(r => {
+        sched.addResource(new Resource(r.id, r.ceilingPriority));
+    });
+
+    // 3. Define Tasks
+    // Note: basePriority 1 is Highest, 3 is Lowest.
+
+    // --- Task 1 (Low Priority) ---
+    // Timeline: Starts t=0. Locks CS1 at t=1. Tries CS3 at t=8.
+    const t1 = new Task('T1', 30, 10, 0, [
+        { duration: 1, resources: [] },                           // t0-t1: Free
+        { duration: 7, resources: ['CS1'] },       // t1-t8: Hold CS1 (Preempted often)
+        { duration: 2, resources: ['CS1', 'CS3'] } // t8: Needs CS3 while holding CS1
     ]);
-    t1.color = '#e67e22'; // Orange
+    t1.basePriority = 3;
+    t1.color = '#eebb55'; // Orange
     sched.addTask(t1);
 
-    sched.addResource(new Resource('CS1', 1));
-    sched.addResource(new Resource('CS2', 1));
+    // --- Task 2 (Medium Priority) ---
+    // Timeline: Starts t=2. Locks CS2 at t=3. Tries CS3 at t=7.
+    const t2 = new Task('T2', 20, 8, 2, [
+        { duration: 1, resources: [] },                           // t2-t3: Free
+        { duration: 4, resources: ['CS2'] },       // t3-t7: Hold CS2
+        { duration: 2, resources: ['CS2', 'CS3'] } // t7: Needs CS3 while holding CS2
+    ]);
+    t2.basePriority = 2;
+    t2.color = '#5599ff'; // Blue
+    sched.addTask(t2);
+
+    // --- Task 3 (High Priority) ---
+    // Timeline: Starts t=4. Locks CS3 at t=5. Tries CS1 at t=6.
+    const t3 = new Task('T3', 10, 4, 4, [
+        { duration: 1, resources: [] },                           // t4-t5: Free
+        { duration: 1, resources: ['CS3'] },       // t5-t6: Hold CS3
+        { duration: 2, resources: ['CS3', 'CS1'] } // t6: Needs CS1 while holding CS3
+    ]);
+    t3.basePriority = 1;
+    t3.color = '#dd5555'; // Red
+    sched.addTask(t3);
 
     updateUI();
     console.log("Deadlock Scenario Loaded");
-    alert("Deadlock Scenario Loaded.\n\nT2 holds CS2, wants CS1.\nT1 holds CS1, wants CS2.\n\nClassic Circular Wait.");
+    alert("Complex Deadlock Scenario Loaded.\n\nT1 (Low) holds CS1, wants CS3.\nT2 (Med) holds CS2, wants CS3.\nT3 (High) holds CS3, wants CS1.\n\nDemonstrates chained blocking and circular wait.");
 }
 
 function handleAddTask(e) {
