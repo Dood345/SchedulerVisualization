@@ -430,7 +430,7 @@ canvas {
     flex: 0 0 36px;
     /* Square */
     width: 36px;
-    background-color: #28a745;
+    background-color: #f39c12;
     /* Green */
     color: white;
     border: none;
@@ -441,7 +441,8 @@ canvas {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-bottom: 2px;
+    padding: 0;
+    /* Remove manual tweak, let Flexbox center it */
     margin-top: 0;
     /* Override generic button margin */
 }
