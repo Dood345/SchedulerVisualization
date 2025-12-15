@@ -53,14 +53,37 @@ body {
     border-bottom: 1px solid var(--border-color);
 }
 
-.form-group {
-    margin-bottom: 10px;
+/* Compact Row for Sidebar */
+.compact-row {
+    display: flex;
+    gap: 8px;
+    /* Tight spacing */
+    margin-bottom: 8px;
+}
+
+.compact-row .form-group {
+    flex: 1;
+    margin-bottom: 0;
+    min-width: 0;
+    /* Allow shrinking */
+}
+
+/* Action Row (Start/Add buttons) */
+.action-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 5px;
 }
 
 .form-group label {
     display: block;
-    font-size: 0.9em;
-    margin-bottom: 4px;
+    font-size: 0.85em;
+    /* Slightly smaller for density */
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .form-group input,

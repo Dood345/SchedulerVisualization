@@ -42,18 +42,27 @@
             <div class="config-section">
                 <h3>Add Task</h3>
                 <form id="taskForm">
-                    <div class="form-group">
-                        <label>ID</label>
-                        <input type="text" id="taskId" required placeholder="T1" style="width: 50px;">
-                        <input type="color" id="taskColor" value="#3498db" style="width: 40px; padding: 0;">
-                    </div>
-                    <div class="form-group">
-                        <label>Period (P)</label>
-                        <input type="number" id="taskPeriod" required min="1" value="20">
+                    <!-- Row 1: Configurations -->
+                    <div class="compact-row">
+                        <div class="form-group">
+                            <label>ID</label>
+                            <input type="text" id="taskId" required placeholder="T1">
+                        </div>
+                        <div class="form-group">
+                            <label>Period</label>
+                            <input type="number" id="taskPeriod" required min="1" value="20">
+                        </div>
+                        <div class="form-group">
+                            <label>Offset</label>
+                            <input type="number" id="taskOffset" min="0" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Priority</label>
+                            <input type="number" id="taskPrio" min="1" value="1">
+                        </div>
                     </div>
 
-                    <!-- New Instruction Builder -->
-                    <!-- New Segment Builder -->
+                    <!-- Row 2: Segment Builder -->
                     <!-- New Segment Builder (Refined) -->
                     <div class="form-group segment-builder-container">
                         <label>Execution Segments</label>
@@ -88,38 +97,35 @@
 
                         <input type="hidden" id="taskSegmentsData" value="[]">
                     </div>
-                    <div class="form-group row">
-                        <div>
-                            <label>Offset</label>
-                            <input type="number" id="taskOffset" min="0" value="0">
+
+                    <!-- Row 3: Actions -->
+                    <div class="action-row">
+                        <div class="form-group" style="flex: 0 0 50px;">
+                            <input type="color" id="taskColor" value="#3498db" style="height: 38px; padding: 2px;">
                         </div>
-                        <div>
-                            <label>Priority</label>
-                            <input type="number" id="taskPrio" min="1" value="1">
-                        </div>
+                        <button type="submit" style="margin-top: 0;">Add Task</button>
                     </div>
-                    <button type="submit">Add Task</button>
                 </form>
             </div>
 
             <div class="config-section">
-                <div class="config-section">
+                <div class="config-section" style="border-bottom: none; padding-bottom: 0;">
                     <h3>Define Resources</h3>
                     <form id="resourceForm">
-                        <div class="form-group">
-                            <label>Resource ID</label>
-                            <input type="text" id="resId" placeholder="R1" required>
-                        </div>
-                        <div class="form-group">
-                            <label>PCP Priority Ceiling</label>
-                            <input type="number" id="resCeiling" min="1" value="1">
-                            <div class="hint">Highest Priority accessing this.</div>
+                        <div class="compact-row">
+                            <div class="form-group">
+                                <label>Resource ID</label>
+                                <input type="text" id="resId" placeholder="R1" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Ceiling</label>
+                                <input type="number" id="resCeiling" min="1" value="1">
+                            </div>
                         </div>
                         <button type="submit">Register Resource</button>
                     </form>
                 </div>
-
-                <div id="taskList" class="task-list"></div>
+                <!-- Legacy taskList removed -->
         </aside>
 
         <main class="main-content">

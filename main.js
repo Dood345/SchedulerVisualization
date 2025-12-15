@@ -391,23 +391,8 @@ function resetSimulation() {
 }
 
 function updateUI() {
-    // Update Task List
-    const list = document.getElementById('taskList');
-    list.innerHTML = sched.tasks.map(t => {
-        // Show instructions summary
-        // Example: [5ms {R1}] -> [3ms]
-        let summary = t.segments.map(s => {
-            const res = s.resources.length > 0 ? `{${s.resources.join(',')}}` : '';
-            return `[${s.duration}${res}]`;
-        }).join('→');
-
-        return `
-        <div class="task-item" style="border-left: 5px solid ${t.color}">
-            <strong>${t.id}</strong> (P${t.period}, C${t.wcet})<br>
-            <small style="font-size:0.8em; color:#666;">${summary}</small>
-        </div>
-        `;
-    }).join('');
+    // Legacy Task List removed from Sidebar.
+    // Tasks are now viewed in the bottom panel tabs.
 
     // Update Resource Select - NO LONGER NEEDED (Form Removed)
     // But we might want to update potential other lists?
