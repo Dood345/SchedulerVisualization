@@ -193,20 +193,43 @@ export class Renderer {
                         if (evt.type === 'DEADLINE_MISS' && evt.taskId === task.id) {
                             let missX = CONSTANTS.LABEL_WIDTH + (tick.time * CONSTANTS.TICK_WIDTH);
 
-                            // Draw a distinct red vertical marker
-                            this.ctx.beginPath();
-                            this.ctx.moveTo(missX, y);
-                            this.ctx.lineTo(missX, y + CONSTANTS.ROW_HEIGHT);
-                            this.ctx.strokeStyle = "red";
-                            this.ctx.lineWidth = 3;
+                            // Helper to draw Vertical Line
+                            const drawLine = (ctx) => {
+                                ctx.beginPath();
+                                ctx.moveTo(missX, y);
+                                ctx.lineTo(missX, y + CONSTANTS.ROW_HEIGHT);
+                            };
+
+                            // Helper to draw X path
+                            const centerY = y + CONSTANTS.ROW_HEIGHT / 2;
+                            const size = 6;
+
+                            const drawX = (ctx) => {
+                                ctx.beginPath();
+                                ctx.moveTo(missX - size, centerY - size);
+                                ctx.lineTo(missX + size, centerY + size);
+                                ctx.moveTo(missX + size, centerY - size);
+                                ctx.lineTo(missX - size, centerY + size);
+                            };
+
+                            // --- LAYER 1: White Border (Thick) ---
+                            this.ctx.strokeStyle = "white";
+                            this.ctx.lineWidth = 5;
+
+                            drawLine(this.ctx);
                             this.ctx.stroke();
 
-                            // Optional: 'X' mark
-                            this.ctx.beginPath();
-                            this.ctx.moveTo(missX - 5, y + 15);
-                            this.ctx.lineTo(missX + 5, y + 5);
-                            this.ctx.moveTo(missX + 5, y + 15);
-                            this.ctx.lineTo(missX - 5, y + 5);
+                            drawX(this.ctx);
+                            this.ctx.stroke();
+
+                            // --- LAYER 2: Red Inner (Thinner) ---
+                            this.ctx.strokeStyle = "red";
+                            this.ctx.lineWidth = 2; // Slightly thinner line
+
+                            drawLine(this.ctx);
+                            this.ctx.stroke();
+
+                            drawX(this.ctx);
                             this.ctx.stroke();
                         }
                     });
