@@ -169,7 +169,7 @@ function loadDeadlock() {
     // Seg 3: 1ms [CS2, CS1]
     // Seg 4: 0ms [CS2]? Or just done?
     // Let's assume simplest deadlock structure:
-    const t2 = new Task('T2', 20, 4, 0, [
+    const t2 = new Task('T2', 20, 2, 0, [
         { duration: 1, resources: ['CS2'] },
         { duration: 1, resources: ['CS2', 'CS1'] }
     ]);
@@ -180,7 +180,7 @@ function loadDeadlock() {
     // Arrives T=2.
     // 1. [0-1] Hold CS1.
     // 2. [1-3] Hold CS1 + CS2.
-    const t1 = new Task('T1', 10, 3, 1, [
+    const t1 = new Task('T1', 10, 2, 1, [
         { duration: 1, resources: ['CS1'] },
         { duration: 1, resources: ['CS1', 'CS2'] }
     ]);
