@@ -598,6 +598,15 @@ function renderSmartLog(history, resourcesMap) {
             }
         }
 
+        // E. DEADLINE MISSES
+        if (tickData.events && tickData.events.length > 0) {
+            tickData.events.forEach(evt => {
+                if (evt.type === 'DEADLINE_MISS') {
+                    printLogLine(logContainer, time, `<strong>DEADLINE MISSED:</strong> ${evt.taskId} did not finish in time!`, "red");
+                }
+            });
+        }
+
         previousRunId = runId;
         previousSnapshot = currentSnapshot;
     });
