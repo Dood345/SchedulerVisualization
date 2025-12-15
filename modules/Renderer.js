@@ -92,10 +92,21 @@ export class Renderer {
                 let taskState = tick.tasks.find(t => t.id === task.id);
                 if (!taskState) return;
 
-                // PREEMPTED/READY: Do not draw
-                if (taskState.state === STATE.READY || (taskState.state !== STATE.RUNNING && taskState.state !== STATE.BLOCKED && taskState.state !== STATE.DEADLOCKED)) {
+                // Check if this task was the one running this tick
+                const isRunning = (tick.runningTaskId === task.id);
+
+                // VISIBILITY CHECK
+                // We draw if:
+                // 1. It is the Running Task (even if COMPLETED now)
+                // 2. It is BLOCKED or DEADLOCKED
+                if (!isRunning && (taskState.state === STATE.READY || taskState.state === STATE.COMPLETED || taskState.state === STATE.RUNNING)) {
+                    // Note: taskState could be RUNNING but not selected (if logic error), but usually Ready.
+                    // If state is RUNNING but not isRunning, it means it's preempted? Or just Ready.
                     return;
                 }
+
+                // If it is COMPLETED but isRunning=false (finished previously), we skip above.
+                // If it is COMPLETED and isRunning=true (finished just now), we Draw.
 
                 let x = CONSTANTS.LABEL_WIDTH + (tick.time * CONSTANTS.TICK_WIDTH);
                 let w = CONSTANTS.TICK_WIDTH; // No gap for continuous look? Or kept spacing? User said "Rectangles".
@@ -105,7 +116,10 @@ export class Renderer {
 
                 // Opacity Logic
                 this.ctx.globalAlpha = 1.0;
-                if (taskState.state === STATE.BLOCKED || taskState.state === STATE.DEADLOCKED) {
+                // If Blocked/Deadlocked AND NOT Running (wait, running task can be blocked? No, if blocked it's not runningId)
+                // Actually my new scheduler loops. If runningId is set, it is RUNNING/COMPLETED.
+                // If Blocked, runningId is someone else (or null).
+                if (!isRunning && (taskState.state === STATE.BLOCKED || taskState.state === STATE.DEADLOCKED)) {
                     this.ctx.globalAlpha = 0.4;
                 }
 

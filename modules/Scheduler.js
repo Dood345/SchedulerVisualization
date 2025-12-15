@@ -115,18 +115,44 @@ export class Scheduler {
         });
 
         // 2. Select Highest Priority Ready/Running Task
-        let readyTasks = this.tasks.filter(t => t.state === STATE.READY || t.state === STATE.RUNNING);
-        readyTasks.sort((a, b) => a.currentPriority - b.currentPriority);
+        // RESCHEDULE LOOP: If the selected task blocks immediately, try the next one.
+        // We do not want to idle the CPU if there is a lower priority task ready to run.
+        let runningTask = null;
 
-        let runningTask = readyTasks.length > 0 ? readyTasks[0] : null;
+        // Loop until we find a task that runs (RUNNING/COMPLETED) or we run out of options
+        while (true) {
+            let readyTasks = this.tasks.filter(t => t.state === STATE.READY || t.state === STATE.RUNNING);
 
-        // 3. Execution Logic
-        if (runningTask) {
-            runningTask.state = STATE.RUNNING;
-            this.runTaskLogic(runningTask);
+            if (readyTasks.length === 0) {
+                runningTask = null; // System Idle
+                break;
+            }
+
+            readyTasks.sort((a, b) => a.currentPriority - b.currentPriority);
+
+            // Pick highest priority
+            let candidate = readyTasks[0];
+
+            // Try to run it
+            candidate.state = STATE.RUNNING;
+            this.runTaskLogic(candidate);
+
+            // Did it stick?
+            if (candidate.state === STATE.RUNNING || candidate.state === STATE.COMPLETED) {
+                runningTask = candidate;
+                break; // Found our runner
+            }
+
+            // If it became BLOCKED (or DEADLOCKED), it is no longer READY/RUNNING.
+            // The filter in the next iteration will exclude it.
+            // Proceed to next candidate.
         }
 
-        // 4. Record History
+        this.runningTask = runningTask; // Store for snapshot visibility check
+
+        // 3. Execution Logic (Already done inside loop)
+        // Just need to handle the NULL case (Idle) implicitly.
+
         // 4. Record History
         const snapshot = this.tasks.map(t => {
             // Identify held resources
