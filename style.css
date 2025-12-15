@@ -598,6 +598,14 @@ canvas {
     display: none;
 }
 
+/* Fix selector: .toggle-buttons input... not .toggle-buttons label... */
+.toggle-buttons input[type="radio"]:checked+label {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 5px rgba(52, 152, 219, 0.3);
+}
+
 .toggle-buttons label {
     display: block;
     flex: 1;

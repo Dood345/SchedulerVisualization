@@ -137,8 +137,21 @@ export class Scheduler {
 
             return {
                 id: t.id,
-                state: (t === runningTask) ? STATE.RUNNING : (t.state === STATE.RUNNING ? STATE.READY : t.state),
-                // Note: If runningTask finished in this tick, it might show COMPLETED.
+                // FIX: Only mark as RUNNING if it was the selected task AND it is still in RUNNING/COMPLETED state.
+                // If it blocked during execution, we must record BLOCKED.
+                state: (t === runningTask) ? t.state : (t.state === STATE.RUNNING ? STATE.READY : t.state),
+                // Actually simplier: We trust t.state now because we updated it in runTaskLogic or attemptLock.
+                // But wait, existing logic forced RUNNING if t===runningTask.
+                // Let's rely on t.state directly, but ensure ready tasks show READY.
+
+                // Correction: runTaskLogic sets state=RUNNING. If it blocks, attemptLock sets state=BLOCKED.
+                // So t.state IS correct.
+                // The only issue is if t was RUNNING but we want to show it as READY implies it wasn't picked?
+                // Original logic: (t === runningTask) ? STATE.RUNNING : (t.state === STATE.RUNNING ? STATE.READY : t.state)
+                // This logic was: "If I picked you, you are RUNNING. If I didn't pick you but you say RUNNING, you are actually READY."
+
+                // New logic: Trust t.state, UNLESS t.state is RUNNING but t != runningTask (then it's READY).
+                // BUT if t == runningTask, we trust t.state (could be RUNNING, BLOCKED, COMPLETED).
                 remaining: t.remainingTotalCost,
                 prio: t.currentPriority,
                 basePrio: t.basePriority,

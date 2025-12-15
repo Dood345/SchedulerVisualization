@@ -173,8 +173,7 @@ function loadDeadlock() {
     // Seg 4: 0ms [CS2]? Or just done?
     // Let's assume simplest deadlock structure:
     const t2 = new Task('T2', 20, 4, 0, [
-        { duration: 1, resources: [] },
-        { duration: 2, resources: ['CS2'] },
+        { duration: 1, resources: ['CS2'] },
         { duration: 1, resources: ['CS2', 'CS1'] }
     ]);
     t2.color = '#9b59b6'; // Purple
@@ -184,9 +183,9 @@ function loadDeadlock() {
     // Arrives T=2.
     // 1. [0-1] Hold CS1.
     // 2. [1-3] Hold CS1 + CS2.
-    const t1 = new Task('T1', 10, 3, 2, [
+    const t1 = new Task('T1', 10, 3, 1, [
         { duration: 1, resources: ['CS1'] },
-        { duration: 2, resources: ['CS1', 'CS2'] }
+        { duration: 1, resources: ['CS1', 'CS2'] }
     ]);
     t1.color = '#e67e22'; // Orange
     sched.addTask(t1);
