@@ -180,7 +180,7 @@ function loadDeadlock() {
     // Timeline: Starts t=0. Locks CS1 at t=0. Tries CS3 at t=5.
     const t1 = new Task('T1', 30, 10, 0, [
         { duration: 1, resources: ['CS1'] },       // t1-t8: Hold CS1 (Preempted often)
-        { duration: 1, resources: ['CS1', 'CS3'] } // t8: Needs CS3 while holding CS1
+        { duration: 1, resources: ['CS1', 'CS2'] } // t8: Needs CS3 while holding CS1
     ]);
     t1.basePriority = 3;
     t1.color = '#eebb55'; // Orange
