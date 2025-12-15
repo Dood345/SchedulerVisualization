@@ -474,71 +474,112 @@ function renderResourceStatus() {
 }
 
 // Replaces displayLog
+// Replaces displayLog
 function renderSmartLog(history, resourcesMap) {
-    const logContainer = document.getElementById('logContent'); // Use existing ID
+    const logContainer = document.getElementById('logContent');
     logContainer.innerHTML = ''; // Clear old logs
 
     if (!history || history.length === 0) return;
 
     let previousRunId = null;
     let consecutiveIdle = 0;
+    let previousSnapshot = null; // To track priority changes
 
     history.forEach((tickData, index) => {
         const time = tickData.time;
         const runId = tickData.runningTaskId;
+        const currentSnapshot = tickData.tasks;
 
-        // Find the full task object for the running task (if any)
-        const runningTaskSnap = runId ? tickData.tasks.find(t => t.id === runId) : null;
+        // Find the full task object for the running task
+        const runningTaskSnap = runId ? currentSnapshot.find(t => t.id === runId) : null;
 
-        // --- 1. HANDLE IDLE COMPRESSION ---
+        // --- 1. DETECT PRIORITY INHERITANCE (Scan all tasks) ---
+        currentSnapshot.forEach(currTask => {
+            // Find this task in the previous tick
+            const prevTask = previousSnapshot ? previousSnapshot.find(t => t.id === currTask.id) : null;
+
+            // Check if priority is currently boosted (Current < Base)
+            if (currTask.isPriorityBoosted) {
+                // Only log if it CHANGED state (wasn't boosted before OR priority value changed)
+                if (!prevTask || !prevTask.isPriorityBoosted || prevTask.prio !== currTask.prio) {
+                    printLogLine(logContainer, time,
+                        `<strong>Priority Inheritance:</strong> ${currTask.id} boosted to priority ${currTask.prio} (inherited).`,
+                        "gold");
+                }
+            } else {
+                // Check if it just dropped back to normal (released inheritance)
+                if (prevTask && prevTask.isPriorityBoosted) {
+                    printLogLine(logContainer, time,
+                        `Priority Restore: ${currTask.id} returned to base priority ${currTask.basePrio}.`,
+                        "gray");
+                }
+            }
+        });
+
+        // --- 2. HANDLE IDLE COMPRESSION ---
         if (runId === null) {
             consecutiveIdle++;
             previousRunId = null;
-            return; // Skip printing for now
+            previousSnapshot = currentSnapshot;
+            return;
         } else {
-            // If we were idling, print the summary now
             if (consecutiveIdle > 0) {
-                printLogLine(logContainer, `${time - consecutiveIdle} - ${time}`, "System Idle", "gray");
+                printLogLine(logContainer, `${time - consecutiveIdle} - ${time - 1}`, "System Idle", "gray");
                 consecutiveIdle = 0;
             }
         }
 
-        // --- 2. DETECT EVENTS ---
+        // --- 3. DETECT EVENTS (Context Switches, Preemption, Blocking) ---
 
-        // Event A: Context Switch (New task started running)
-        if (runId !== previousRunId && runningTaskSnap.state === 'RUNNING') {
-            printLogLine(logContainer, time, `Context Switch: <strong>${runId}</strong> started executing.`, "green");
+        // A. DETECT PREEMPTION
+        // If the task that was running LAST tick is now READY, it was preempted.
+        if (previousRunId && previousRunId !== runId) {
+            // Find the task that WAS running
+            const prevTaskNow = currentSnapshot.find(t => t.id === previousRunId);
+
+            // If it still exists and is READY, it didn't finish or block—it was forced out.
+            if (prevTaskNow && prevTaskNow.state === 'READY') {
+                printLogLine(logContainer, time,
+                    `<strong>Preemption:</strong> ${previousRunId} preempted by higher priority task (${runId}).`,
+                    "purple");
+            }
         }
 
-        // Event B: Blocking / Deadlock
-        // Note: The scheduler might set runningTaskId to a task, but that task immediately blocked.
-        // We check the *state* of the 'running' task in the snapshot.
+        // B. DETECT BLOCKING
+        // If the task meant to run is marked BLOCKED in the snapshot
         if (runningTaskSnap.state === 'BLOCKED') {
             const blockerResId = runningTaskSnap.blockedOn;
-            // Ceiling blocker logic requires access to Resource state which is hard in history snapshots
-            // unless we captured it. For now, rely on standard resource check.
+            const ceilingBlockerId = runningTaskSnap.ceilingBlocker ? runningTaskSnap.ceilingBlocker.id : null;
 
-            let msg = `${runId} blocked.`;
-            let color = "orange";
+            let msg = "";
 
-            if (blockerResId) {
-                // Standard Mutex Case
-                const resOwner = getResourceOwnerAtTime(tickData, blockerResId); // Helper needed
-                msg = `${runId} blocked on resource <strong>${blockerResId}</strong> (held by ${resOwner || '?'})`;
+            if (ceilingBlockerId) {
+                // PCP Specific Blocking
+                msg = `<strong>${runId} blocked</strong> by System Ceiling (Ceiling held by ${ceilingBlockerId}).`;
+            } else if (blockerResId) {
+                // Standard Mutex Blocking
+                // Find who owns it RIGHT NOW in this snapshot
+                const resOwner = getResourceOwnerAtTime(currentSnapshot, blockerResId);
+                msg = `<strong>${runId} blocked</strong> waiting for resource [${blockerResId}] (held by ${resOwner}).`;
             } else {
-                // Likely Ceiling Block (if no direct resource blocker but blocked)
-                msg = `${runId} blocked by <strong>System Priority Ceiling</strong>`;
+                msg = `${runId} blocked (Reason unknown).`;
             }
 
-            printLogLine(logContainer, time, msg, color);
+            printLogLine(logContainer, time, msg, "orange");
         }
 
-        // Event C: Deadlock
-        else if (runningTaskSnap.state === 'DEADLOCKED' || runningTaskSnap.state === 'DEADLOCK') {
-            printLogLine(logContainer, time, `<strong>DEADLOCK DETECTED</strong> involving ${runId}`, "red");
+        // C. STANDARD CONTEXT SWITCH (New task started)
+        else if (runId !== previousRunId && runningTaskSnap.state === 'RUNNING') {
+            printLogLine(logContainer, time, `Context Switch: ${runId} started executing.`, "green");
+        }
+
+        // D. DEADLOCK
+        else if (runningTaskSnap.state === 'DEADLOCKED') {
+            printLogLine(logContainer, time, `<strong>DEADLOCK:</strong> ${runId} is stuck in a cycle!`, "red");
         }
 
         previousRunId = runId;
+        previousSnapshot = currentSnapshot;
     });
 
     // Flush trailing idle
@@ -547,7 +588,17 @@ function renderSmartLog(history, resourcesMap) {
     }
 }
 
-// Helper to print nice lines
+// Helper to look up resource ownership in a specific snapshot
+function getResourceOwnerAtTime(snapshotTasks, resourceId) {
+    for (let t of snapshotTasks) {
+        if (t.heldResources && t.heldResources.includes(resourceId)) {
+            return t.id;
+        }
+    }
+    return "Unknown";
+}
+
+// Helper for consistent styling
 function printLogLine(container, time, message, colorClass) {
     const div = document.createElement('div');
     div.style.borderBottom = "1px solid #eee";
@@ -555,26 +606,17 @@ function printLogLine(container, time, message, colorClass) {
     div.style.fontFamily = "monospace";
     div.style.fontSize = "13px";
 
-    // Color coding
     let color = "#333";
-    if (colorClass === 'red') color = "#d9534f";
-    if (colorClass === 'orange') color = "#f0ad4e";
-    if (colorClass === 'green') color = "#2ecc71"; // Brighter green
+    if (colorClass === 'red') color = "#d9534f"; // Bootstrap Danger
+    if (colorClass === 'orange') color = "#f0ad4e"; // Bootstrap Warning
+    if (colorClass === 'green') color = "#5cb85c"; // Bootstrap Success
+    if (colorClass === 'gold') color = "#d4af37"; // Gold for Priority
+    if (colorClass === 'purple') color = "#6f42c1"; // Purple for Preemption
     if (colorClass === 'gray') color = "#999";
 
-    div.innerHTML = `<span style="color:#888; width:70px; display:inline-block;">T=${time}</span> <span style="color:${color}">${message}</span>`;
+    // Format: T=X  Message
+    div.innerHTML = `<span style="color:#888; width:60px; display:inline-block;">T=${time}</span> <span style="color:${color}">${message}</span>`;
     container.appendChild(div);
-}
-
-// Helper to find who owned a resource in a specific snapshot
-function getResourceOwnerAtTime(tickSnapshot, resourceId) {
-    // Look through all tasks in this snapshot to see who holds the resource
-    for (let t of tickSnapshot.tasks) {
-        if (t.heldResources.includes(resourceId)) {
-            return t.id;
-        }
-    }
-    return "Unknown";
 }
 
 // Initial UI

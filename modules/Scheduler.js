@@ -183,6 +183,7 @@ export class Scheduler {
                 basePrio: t.basePriority,
                 isPriorityBoosted: (t.currentPriority < t.basePriority), // Lower value = Higher priority
                 blockedOn: t.blockedOn,
+                ceilingBlocker: t.ceilingBlocker ? { id: t.ceilingBlocker.id } : null,
                 heldResources: held
             };
         });
